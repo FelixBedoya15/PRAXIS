@@ -229,7 +229,15 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <button
+            type="button"
+            onClick={() => openProfileModal('USER')}
+            className="h-8 w-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-sm ring-1 ring-blue-500/30"
+            title={`Perfil: ${activeUser.name} - Clic para editar`}
+          >
+            {activeUser.initials || activeUser.name.slice(0, 2).toUpperCase()}
+          </button>
           <button
             onClick={toggleTheme}
             className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
@@ -469,8 +477,8 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
 
       {/* Main Content Area - Scrollable */}
       <main className="flex-1 flex flex-col h-full overflow-y-auto min-w-0 bg-slate-50 dark:bg-slate-950 transition-colors duration-200 print:overflow-visible print:h-auto print:bg-white print:p-0 print:m-0">
-        {/* Top Header - Sticky */}
-        <header className="h-14 sm:h-16 px-3 sm:px-6 bg-white/85 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 flex items-center justify-between sticky top-0 z-30 shrink-0 shadow-sm no-print print:hidden">
+        {/* Top Header - Sticky (Desktop Only to prevent double header on mobile) */}
+        <header className="h-14 sm:h-16 px-3 sm:px-6 bg-white/85 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 hidden md:flex items-center justify-between sticky top-0 z-30 shrink-0 shadow-sm no-print print:hidden">
           <div className="flex items-center gap-2 sm:gap-3 overflow-hidden">
             <button
               onClick={toggleSidebar}
@@ -538,10 +546,74 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
         </header>
 
         {/* Dynamic Page Content with Fluid Responsive Padding */}
-        <div className="flex-1 p-3.5 sm:p-5 md:p-6 lg:p-7 max-w-[1600px] w-full mx-auto animate-fade-in space-y-6 print:p-0 print:m-0 print:max-w-none print:w-full print:space-y-0">
+        <div className="flex-1 p-3 sm:p-5 md:p-6 lg:p-7 pb-24 md:pb-8 max-w-[1600px] w-full mx-auto animate-fade-in space-y-4 sm:space-y-6 print:p-0 print:m-0 print:max-w-none print:w-full print:space-y-0">
           {children}
         </div>
       </main>
+
+      {/* Mobile Bottom Navigation Bar (App Style for Cellphones) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800 z-40 px-2 flex items-center justify-around shadow-2xl no-print print:hidden">
+        <Link
+          href="/"
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors ${
+            pathname === '/'
+              ? 'text-blue-600 dark:text-blue-400 font-bold'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium'
+          }`}
+        >
+          <LayoutDashboard size={20} />
+          <span className="text-[10px] mt-1 tracking-tight">Inicio</span>
+        </Link>
+
+        <Link
+          href="/clientes"
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors ${
+            pathname === '/clientes'
+              ? 'text-blue-600 dark:text-blue-400 font-bold'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium'
+          }`}
+        >
+          <Building2 size={20} />
+          <span className="text-[10px] mt-1 tracking-tight">Clientes</span>
+        </Link>
+
+        <Link
+          href="/comisiones"
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors ${
+            pathname === '/comisiones'
+              ? 'text-blue-600 dark:text-blue-400 font-bold'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium'
+          }`}
+        >
+          <Calculator size={20} />
+          <span className="text-[10px] mt-1 tracking-tight">PILA</span>
+        </Link>
+
+        <Link
+          href="/campo-sst"
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors ${
+            pathname === '/campo-sst'
+              ? 'text-blue-600 dark:text-blue-400 font-bold'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium'
+          }`}
+        >
+          <HardHat size={20} />
+          <span className="text-[10px] mt-1 tracking-tight">SST</span>
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(true)}
+          className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors ${
+            mobileMenuOpen
+              ? 'text-blue-600 dark:text-blue-400 font-bold'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium'
+          }`}
+        >
+          <Menu size={20} />
+          <span className="text-[10px] mt-1 tracking-tight">Menú</span>
+        </button>
+      </nav>
 
       {/* Global Profile & Corporate Identity Modal */}
       <ProfileModal

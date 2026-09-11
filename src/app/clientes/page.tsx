@@ -1542,7 +1542,7 @@ A partir de este momento cuentan con el respaldo integral de *PRAXIS Prevención
               >
                 <div>
                   {/* Card Header & Fast Actions */}
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 sm:gap-3">
                     <div className="min-w-0 flex-1 space-y-0.5">
                       <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 block">
                         NIT: {client.nit}
@@ -1556,7 +1556,7 @@ A partir de este momento cuentan con el respaldo integral de *PRAXIS Prevención
                     </div>
 
                     {/* Botonera Superior de Acciones Rápidas */}
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap sm:flex-nowrap shrink-0 pt-1 sm:pt-0">
                       {/* Botón Popup Retorno Empresa */}
                       <button
                         type="button"

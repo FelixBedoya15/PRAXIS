@@ -825,7 +825,92 @@ export default function ComisionesPage() {
 
       {/* Main Reconciliation Table */}
       <div className="rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        {/* Mobile View: Cards */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800/60">
+          {filteredRecords.length === 0 ? (
+            <div className="p-6 text-center text-xs text-slate-400">
+              No hay planillas registradas para los filtros seleccionados.
+            </div>
+          ) : (
+            filteredRecords.map((r) => {
+              const arl = arls.find((a) => a.id === r.arlId);
+              const client = clients.find((c) => c.id === r.clientId);
+              const hasMulti = client?.workCenters && client.workCenters.length > 1;
+              const grossComm = r.realPaidCommission || r.expectedCommission;
+              const reteAmount = r.retefuenteAmount ?? (grossComm * 0.10);
+              const netComm = r.netCommissionReceived ?? (grossComm - reteAmount);
+              const retPct = r.clientReturnPercentage ?? client?.returnPercentage ?? 25;
+              const retAmount = r.clientReturnAmount ?? (grossComm * (retPct / 100));
+              const agencyMargin = r.agencyNetMargin ?? (netComm - retAmount);
+
+              return (
+                <div key={`mob-${r.id}`} className="p-3.5 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-mono text-[10px] text-blue-600 dark:text-blue-400 font-bold block">{r.month}</span>
+                      <h4 className="font-bold text-slate-900 dark:text-white text-xs truncate">{r.clientName}</h4>
+                      <span className="text-[10px] text-slate-500">{arl?.shortName || r.arlId} {hasMulti ? `• ${client?.workCenters?.length} Centros` : ''}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                          r.status === 'CONCILIADO'
+                            ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20'
+                            : r.status === 'MORA'
+                            ? 'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20'
+                            : 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20'
+                        }`}
+                      >
+                        {r.status}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setSelectedRecordForInvoice(r);
+                          setShowInvoiceModal(true);
+                        }}
+                        className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-600 hover:text-white text-blue-600 dark:text-blue-400 transition-colors"
+                        title="Cuenta de Cobro"
+                      >
+                        <FileText size={13} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11px] p-2 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800">
+                    <div>
+                      <span className="text-slate-400 text-[10px] block">Nómina IBC:</span>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatCOP(r.ibcReported)}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] block">Aporte ARL:</span>
+                      <span className="font-mono text-slate-700 dark:text-slate-300">{formatCOP(r.arlContribution)}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 text-[10px] block">Comisión Bruta:</span>
+                      <span className="font-mono font-bold text-slate-900 dark:text-white">{formatCOP(grossComm)}</span>
+                    </div>
+                    <div>
+                      <span className="text-rose-500 text-[10px] block">Retención 10%:</span>
+                      <span className="font-mono font-bold text-rose-600 dark:text-rose-400">-{formatCOP(reteAmount)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] px-1">
+                    <span className="text-indigo-600 dark:text-indigo-400 font-medium">
+                      Retorno ({retPct}%): <strong>{formatCOP(retAmount)}</strong>
+                    </span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">
+                      Margen: {formatCOP(agencyMargin)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop View: Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800 uppercase tracking-wider text-[10px]">
               <tr>

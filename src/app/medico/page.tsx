@@ -573,7 +573,62 @@ export default function IndicadoresSSTPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile View: Cards */}
+        <div className="block md:hidden divide-y divide-slate-100 dark:divide-slate-800/60">
+          {filteredRecords.length === 0 ? (
+            <div className="p-6 text-center text-xs text-slate-400">
+              No hay registros médicos encontrados con los filtros seleccionados.
+            </div>
+          ) : (
+            filteredRecords.map((r) => (
+              <div key={`mob-${r.id}`} className="p-3.5 space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="font-mono text-[10px] text-slate-500 block">{r.date}</span>
+                    <h4 className="font-bold text-slate-900 dark:text-white text-xs truncate">{r.employeeName}</h4>
+                    <span className="text-[10px] text-slate-500 block">{r.employeeRole} • {r.clientName}</span>
+                  </div>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[9px] font-bold shrink-0 ${
+                      r.incidentType === 'ACCIDENTE_TRABAJO'
+                        ? 'bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
+                        : r.incidentType === 'ENFERMEDAD_LABORAL'
+                        ? 'bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800'
+                        : r.incidentType === 'AUSENTISMO_COMUN'
+                        ? 'bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                        : 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                    }`}
+                  >
+                    {r.incidentType.replace('_', ' ')}
+                  </span>
+                </div>
+
+                <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-[11px] space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/80 px-1.5 py-0.5 rounded text-[10px]">
+                      {r.diagnosisCie10}
+                    </span>
+                    <span className="text-slate-700 dark:text-slate-300 truncate">{r.diagnosisDescription}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-200 dark:border-slate-800/60">
+                    <span>Incapacidad: <strong className="text-slate-800 dark:text-slate-200">{r.daysLost} días</strong></span>
+                    <span>FURAT: <strong className="font-mono text-slate-700 dark:text-slate-300">{r.furatFurepCode || 'N/A'}</strong></span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setViewingRecord(r)}
+                  className="w-full py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/80 hover:bg-blue-600 hover:text-white text-blue-600 dark:text-blue-400 text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  <Eye size={13} /> <span>Ver Ficha Técnica</span>
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop View: Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800 uppercase tracking-wider text-[10px]">
               <tr>

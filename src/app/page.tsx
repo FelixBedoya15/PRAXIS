@@ -183,9 +183,6 @@ export default function DashboardPage() {
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-black bg-blue-500/40 text-blue-100 border border-blue-400/40 tracking-wider">
                   {agencyProfile?.name || 'PRAXIS PREVENCIÓN Y SEGUROS LTDA.'}
                 </span>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                  <CheckCircle2 size={12} /> Exclusión IVA Art. 476 E.T.
-                </span>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
                   <Layers size={12} /> {totalWorkCenters} Centros Multiriesgo
                 </span>
@@ -199,16 +196,16 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
             <Link
               href="/comisiones"
-              className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 transition-all"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 transition-all text-center"
             >
               <Calculator size={14} /> <span>Conciliar PILA</span>
             </Link>
             <Link
               href="/clientes"
-              className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-all"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-all text-center"
             >
               <Target size={14} /> <span>Pipeline Leads</span>
             </Link>
