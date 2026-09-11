@@ -1,0 +1,227 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 33% 98%;
+    --foreground: 224 71% 4%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71% 4%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71% 4%;
+    --primary: 217 91% 45%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 9% 30%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 217 91% 95%;
+    --accent-foreground: 217 91% 40%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 217 91% 45%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 224 71% 4%;
+    --foreground: 210 40% 98%;
+    --card: 224 71% 7%;
+    --card-foreground: 210 40% 98%;
+    --popover: 224 71% 7%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 224 71% 4%;
+    --secondary: 215 28% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 215 28% 17%;
+    --muted-foreground: 217 11% 65%;
+    --accent: 217 91% 20%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 215 28% 17%;
+    --input: 215 28% 17%;
+    --ring: 217 91% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased selection:bg-blue-500/20 selection:text-blue-700 dark:selection:text-blue-200 font-sans;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.dark .glass-panel {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(30, 41, 59, 0.8);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.5);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.8);
+}
+
+/* ==========================================================================
+   OFFICIAL PRINT & PDF STYLESHEET (PRAXIS PREVENCIÓN Y SEGUROS)
+   ========================================================================== */
+.print-only {
+  display: none !important;
+}
+
+@media print {
+  @page {
+    size: letter portrait;
+    margin: 0mm !important;
+  }
+
+  /* Universal Reset for Document Printing */
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 11pt !important;
+    line-height: 1.45 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Universal hide for all screen navigation, topbars, buttons, toolbars */
+  aside,
+  nav,
+  header,
+  footer,
+  button,
+  .no-print,
+  [data-no-print="true"] {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* Reset outer container heights and overflows */
+  #__next,
+  main,
+  div {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* When a printable modal is active, hide everything else on the underlying page */
+  body:has(.printable-modal-overlay) main > *:not(:has(.printable-modal-overlay)) {
+    display: none !important;
+  }
+
+  /* Convert modal overlay into a clean static document container */
+  .printable-modal-overlay {
+    position: static !important;
+    inset: auto !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    z-index: auto !important;
+  }
+
+  /* Strip all floating modal dialog chrome (borders, rounded corners, shadows, max-height) */
+  .printable-modal-box {
+    position: static !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Official Clean Document Sheet Styling */
+  .official-document-sheet {
+    display: block !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    font-size: 10.5pt !important;
+    line-height: 1.5 !important;
+  }
+
+  /* Force high-contrast text on print */
+  .official-document-sheet * {
+    color: #0f172a !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+  }
+
+  /* Subtle print borders for tables and boxes */
+  .official-document-sheet table,
+  .official-document-sheet th,
+  .official-document-sheet td {
+    border-color: #cbd5e1 !important;
+  }
+
+  /* Preserve intentional background fills (e.g. table headers, badges, highlights) */
+  .print-preserve-bg,
+  .print-preserve-bg * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Prevent awkward page breaks inside signature blocks and table rows */
+  .page-break-inside-avoid,
+  .official-document-sheet tr,
+  .official-document-sheet .signature-block {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
+

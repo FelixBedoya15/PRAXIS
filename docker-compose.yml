@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # 1. Next.js Web App & API
+  crm-arl-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crm_arl_wappy
+    restart: always
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_APP_NAME=WAPPY ARL & CRM
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-wappy_admin}:${POSTGRES_PASSWORD:-WappySecure2026!}@postgres:5432/${POSTGRES_DB:-wappy_arl_db}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - JWT_SECRET=${JWT_SECRET:-secret_jwt_key_wappy_arl_2026}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - crm_data:/app/data
+
+  # 2. PostgreSQL 16 Relational Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: wappy_postgres_db
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wappy_arl_db}
+      POSTGRES_USER: ${POSTGRES_USER:-wappy_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-WappySecure2026!}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wappy_admin} -d ${POSTGRES_DB:-wappy_arl_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 3. Automated Daily Backup Service (Cron 2:00 AM)
+  postgres-backup:
+    image: prodrigestivill/postgres-backup-local:16
+    container_name: wappy_postgres_backup
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - postgres_backups:/backups
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=${POSTGRES_DB:-wappy_arl_db}
+      - POSTGRES_USER=${POSTGRES_USER:-wappy_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-WappySecure2026!}
+      - SCHEDULE=${BACKUP_CRON_SCHEDULE:-@daily}
+      - BACKUP_KEEP_DAYS=30
+      - BACKUP_KEEP_WEEKS=8
+      - BACKUP_KEEP_MONTHS=12
+      - HEALTHCHECK_PORT=8080
+
+volumes:
+  crm_data:
+    driver: local
+  postgres_data:
+    driver: local
+  postgres_backups:
+    driver: local
