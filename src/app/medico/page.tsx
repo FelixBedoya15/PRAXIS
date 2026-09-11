@@ -26,7 +26,9 @@ import {
   Clock,
   Shield,
   Filter,
-  Check
+  Check,
+  HardHat,
+  Calculator
 } from 'lucide-react';
 import { getStoredClients, getStoredMedicalRecords, saveStoredMedicalRecords, getStoredAgencyProfile } from '@/lib/storage';
 import { ClientCompany, MedicalRecord, AgencyProfile } from '@/types';
@@ -220,6 +222,8 @@ export default function IndicadoresSSTPage() {
     }
   });
 
+  const selectedClientObj = clients.find((c) => c.id === selectedCompanyFilter);
+
   return (
     <div className="space-y-6 max-w-full animate-fade-in pb-10">
       {/* Header */}
@@ -295,6 +299,59 @@ export default function IndicadoresSSTPage() {
           </select>
         </div>
       </div>
+
+      {/* Active Company Filter Banner for Cross-Module Connectivity */}
+      {selectedClientObj && (
+        <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs animate-fade-in shadow-sm">
+          <div className="flex items-center gap-2 text-rose-800 dark:text-rose-300 min-w-0">
+            <Building2 size={16} className="text-rose-600 dark:text-rose-400 shrink-0" />
+            <div className="min-w-0">
+              <span className="block truncate">
+                Filtrando casos médicos y ausentismo de: <strong className="font-extrabold">{selectedClientObj.name}</strong> (NIT {selectedClientObj.nit})
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono">
+                {selectedClientObj.employeeCount} trabajadores • ARL {selectedClientObj.primaryArlId.toUpperCase()} • Retorno SST {selectedClientObj.returnPercentage ?? 25}%
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Link
+              href={`/campo-sst?cliente=${encodeURIComponent(selectedClientObj.id)}`}
+              className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-700 dark:text-slate-200 font-bold text-[11px] border border-slate-200 dark:border-slate-700 transition-all flex items-center gap-1 shadow-sm"
+              title="Ver visitas técnicas y auditoría 0312 de esta empresa"
+            >
+              <HardHat size={13} className="text-emerald-500" /> <span>Campo SST / 0312</span>
+            </Link>
+            <Link
+              href={`/comisiones?cliente=${encodeURIComponent(selectedClientObj.id)}`}
+              className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-700 dark:text-slate-200 font-bold text-[11px] border border-slate-200 dark:border-slate-700 transition-all flex items-center gap-1 shadow-sm"
+              title="Ver liquidación PILA y retorno de esta empresa"
+            >
+              <Calculator size={13} className="text-blue-500" /> <span>Bolsa PILA</span>
+            </Link>
+            <Link
+              href="/clientes"
+              className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[11px] border border-slate-200 dark:border-slate-700 transition-all shadow-sm"
+              title="Ver expediente en Clientes"
+            >
+              <span>Expediente</span>
+            </Link>
+            <button
+              onClick={() => {
+                setSelectedCompanyFilter('TODAS');
+                if (typeof window !== 'undefined') {
+                  const url = new URL(window.location.href);
+                  url.searchParams.delete('cliente');
+                  window.history.replaceState({}, '', url.pathname);
+                }
+              }}
+              className="px-2.5 py-1 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[11px] transition-all shadow-sm"
+            >
+              ✕ Ver consolidado
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Row 1: 5 Legal KPI Cards (Resolución 0312 de 2019) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">

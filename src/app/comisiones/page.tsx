@@ -766,16 +766,24 @@ export default function ComisionesPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-slate-800/60 text-[10px]">
+                <div className="flex flex-wrap items-center justify-between pt-1 border-t border-slate-200/60 dark:border-slate-800/60 text-[10px] gap-2">
                   <span className="text-slate-400">
                     {clientVisits.length} visitas • {clientRecords.length} planillas
                   </span>
-                  <Link
-                    href={`/campo-sst?cliente=${encodeURIComponent(cli.id)}`}
-                    className="text-blue-600 dark:text-blue-400 hover:underline font-bold flex items-center gap-0.5"
-                  >
-                    Agendar / Ver Visitas →
-                  </Link>
+                  <div className="flex items-center gap-3">
+                    <Link
+                      href={`/campo-sst?cliente=${encodeURIComponent(cli.id)}`}
+                      className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold flex items-center gap-0.5"
+                    >
+                      Campo SST →
+                    </Link>
+                    <Link
+                      href={`/medico?cliente=${encodeURIComponent(cli.id)}`}
+                      className="text-rose-600 dark:text-rose-400 hover:underline font-bold flex items-center gap-0.5"
+                    >
+                      Médico →
+                    </Link>
+                  </div>
                 </div>
               </div>
             );

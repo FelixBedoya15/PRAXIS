@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   HardHat,
   Wifi,
@@ -36,7 +37,9 @@ import {
   ArrowLeft,
   Edit3,
   CalendarDays,
-  Printer
+  Printer,
+  Calculator,
+  Stethoscope
 } from 'lucide-react';
 import { getStoredClients, saveStoredClients, getStoredFieldVisits, saveStoredFieldVisits, getStoredAgencyProfile } from '@/lib/storage';
 import { ClientCompany, FieldVisit, AgencyProfile } from '@/types';
@@ -421,6 +424,8 @@ export default function CampoSSTPage() {
     return matchesComp && matchesSearch;
   });
 
+  const selectedClientObj = clients.find((c) => c.id === filterCompany);
+
   // Kanban Columns Data
   const programadas = filteredVisits.filter((v) => v.status === 'PROGRAMADA');
   const pendientes = filteredVisits.filter(
@@ -623,6 +628,59 @@ export default function CampoSSTPage() {
           </div>
         </div>
       </div>
+
+      {/* Active Company Filter Banner for Cross-Module Connectivity */}
+      {selectedClientObj && (
+        <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs animate-fade-in shadow-sm">
+          <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 min-w-0">
+            <Building2 size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <div className="min-w-0">
+              <span className="block truncate">
+                Filtrando bitácora técnica de: <strong className="font-extrabold">{selectedClientObj.name}</strong> (NIT {selectedClientObj.nit})
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono">
+                {selectedClientObj.standardsScore !== undefined ? `Res. 0312: ${selectedClientObj.standardsScore}% (${selectedClientObj.standardsRating || 'Registrado'})` : 'Res. 0312 pendiente'} • {selectedClientObj.employeeCount} trabajadores
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Link
+              href={`/comisiones?cliente=${encodeURIComponent(selectedClientObj.id)}`}
+              className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-700 dark:text-slate-200 font-bold text-[11px] border border-slate-200 dark:border-slate-700 transition-all flex items-center gap-1 shadow-sm"
+              title="Ver conciliación PILA y bolsa de retorno de esta empresa"
+            >
+              <Calculator size={13} className="text-blue-500" /> <span>Bolsa PILA</span>
+            </Link>
+            <Link
+              href={`/medico?cliente=${encodeURIComponent(selectedClientObj.id)}`}
+              className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-rose-600 hover:text-white text-slate-700 dark:text-slate-200 font-bold text-[11px] border border-slate-200 dark:border-slate-700 transition-all flex items-center gap-1 shadow-sm"
+              title="Ver casos médicos y ausentismo de esta empresa"
+            >
+              <Stethoscope size={13} className="text-rose-500" /> <span>Médico & AT</span>
+            </Link>
+            <Link
+              href="/clientes"
+              className="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[11px] border border-slate-200 dark:border-slate-700 transition-all shadow-sm"
+              title="Ver expediente en Clientes"
+            >
+              <span>Expediente</span>
+            </Link>
+            <button
+              onClick={() => {
+                setFilterCompany('TODAS');
+                if (typeof window !== 'undefined') {
+                  const url = new URL(window.location.href);
+                  url.searchParams.delete('cliente');
+                  window.history.replaceState({}, '', url.pathname);
+                }
+              }}
+              className="px-2.5 py-1 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[11px] transition-all shadow-sm"
+            >
+              ✕ Ver todas
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* VIEW 1: TABLERO KANBAN */}
       {viewMode === 'KANBAN' && (
