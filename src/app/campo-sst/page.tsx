@@ -112,7 +112,13 @@ export default function CampoSSTPage() {
     const handleProfileUpdated = () => {
       setAgencyProfile(getStoredAgencyProfile());
     };
+    const handleDataSynced = () => {
+      setClients(getStoredClients());
+      setVisits(getStoredFieldVisits());
+      setAgencyProfile(getStoredAgencyProfile());
+    };
     window.addEventListener('praxis_profile_updated', handleProfileUpdated);
+    window.addEventListener('praxis_data_synced', handleDataSynced);
 
     // Check URL parameters for direct cross-module navigation
     if (typeof window !== 'undefined') {
@@ -139,7 +145,10 @@ export default function CampoSSTPage() {
             setEditingVisitId(null);
           }
           setShowNewVisitModal(true);
-          return;
+          return () => {
+            window.removeEventListener('praxis_profile_updated', handleProfileUpdated);
+            window.removeEventListener('praxis_data_synced', handleDataSynced);
+          };
         }
       }
     }
@@ -151,6 +160,7 @@ export default function CampoSSTPage() {
 
     return () => {
       window.removeEventListener('praxis_profile_updated', handleProfileUpdated);
+      window.removeEventListener('praxis_data_synced', handleDataSynced);
     };
   }, []);
 

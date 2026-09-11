@@ -68,7 +68,13 @@ export default function IndicadoresSSTPage() {
     const handleProfileUpdated = () => {
       setAgencyProfile(getStoredAgencyProfile());
     };
+    const handleDataSynced = () => {
+      setClients(getStoredClients());
+      setMedicalRecords(getStoredMedicalRecords());
+      setAgencyProfile(getStoredAgencyProfile());
+    };
     window.addEventListener('praxis_profile_updated', handleProfileUpdated);
+    window.addEventListener('praxis_data_synced', handleDataSynced);
 
     // Check URL parameters for direct cross-module navigation
     if (typeof window !== 'undefined') {
@@ -78,9 +84,6 @@ export default function IndicadoresSSTPage() {
         const found = cls.find((c) => c.id === targetClientId);
         if (found) {
           setSelectedCompanyFilter(found.id);
-          setNewClientId(found.id);
-          setShowNewModal(true);
-          return;
         }
       }
     }
@@ -91,6 +94,7 @@ export default function IndicadoresSSTPage() {
 
     return () => {
       window.removeEventListener('praxis_profile_updated', handleProfileUpdated);
+      window.removeEventListener('praxis_data_synced', handleDataSynced);
     };
   }, []);
 

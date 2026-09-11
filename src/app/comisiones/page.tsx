@@ -81,11 +81,18 @@ export default function ComisionesPage() {
     setArls(loadedArls);
     setFieldVisits(loadedVisits);
     setAgencyProfile(getStoredAgencyProfile());
-
     const handleProfileUpdated = () => {
       setAgencyProfile(getStoredAgencyProfile());
     };
+    const handleDataSynced = () => {
+      setRecords(getStoredPilaRecords());
+      setClients(getStoredClients());
+      setArls(getStoredARLs());
+      setFieldVisits(getStoredFieldVisits());
+      setAgencyProfile(getStoredAgencyProfile());
+    };
     window.addEventListener('praxis_profile_updated', handleProfileUpdated);
+    window.addEventListener('praxis_data_synced', handleDataSynced);
 
     // Cross-module URL navigation ?cliente=ID
     if (typeof window !== 'undefined') {
@@ -94,15 +101,16 @@ export default function ComisionesPage() {
       if (targetClientId) {
         const found = clis.find((c) => c.id === targetClientId);
         if (found) {
-          setActiveClientFilter(found);
           setSelectedClientForNew(found.id);
-          setSearchTerm(found.name);
           const arl = loadedArls.find((a) => a.id === found.primaryArlId);
           const fin = calculateCompanyFinancials(found, arl);
           setNewIbc(fin.totalIbc);
           setNewRisk(found.riskClass);
           setNewReturnPercentage(found.returnPercentage ?? 25);
-          return;
+          return () => {
+            window.removeEventListener('praxis_profile_updated', handleProfileUpdated);
+            window.removeEventListener('praxis_data_synced', handleDataSynced);
+          };
         }
       }
     }
@@ -116,6 +124,7 @@ export default function ComisionesPage() {
 
     return () => {
       window.removeEventListener('praxis_profile_updated', handleProfileUpdated);
+      window.removeEventListener('praxis_data_synced', handleDataSynced);
     };
   }, []);
 

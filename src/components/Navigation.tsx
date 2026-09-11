@@ -41,6 +41,7 @@ import {
   getStoredActiveUserProfile,
   saveStoredActiveUserId,
   getStoredUserProfiles,
+  syncFromServer,
 } from '@/lib/storage';
 import ProfileModal from './ProfileModal';
 
@@ -48,6 +49,7 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const [currentRole, setCurrentRole] = useState<UserRole>('ADMIN');
   const [isOnline, setIsOnline] = useState(true);
+  const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -81,6 +83,16 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
     };
     refreshProfiles();
     window.addEventListener('praxis_profile_updated', refreshProfiles);
+    window.addEventListener('praxis_data_synced', refreshProfiles);
+
+    // Initial server sync
+    const triggerSync = async () => {
+      const res = await syncFromServer();
+      setIsDbConnected(res.connected);
+    };
+    triggerSync();
+    const syncTimer = setInterval(triggerSync, 25000);
+    window.addEventListener('focus', triggerSync);
 
     // Saved role
     const savedRole = localStorage.getItem('wappy_current_role_v1') as UserRole;
@@ -107,6 +119,9 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('praxis_profile_updated', refreshProfiles);
+      window.removeEventListener('praxis_data_synced', refreshProfiles);
+      window.removeEventListener('focus', triggerSync);
+      clearInterval(syncTimer);
     };
   }, []);
 
@@ -438,15 +453,15 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
 
           {(!isCollapsed || mobileMenuOpen) ? (
             <div className="flex items-center justify-between px-2 text-[11px] text-slate-500 dark:text-slate-400">
-              <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                {isOnline ? 'Conectado' : 'Offline'}
+              <span className={`flex items-center gap-1.5 font-medium ${isDbConnected ? 'text-emerald-600 dark:text-emerald-400' : isOnline ? 'text-sky-600 dark:text-sky-400' : 'text-amber-500'}`}>
+                <span className={`h-2 w-2 rounded-full ${isDbConnected ? 'bg-emerald-500 animate-pulse' : isOnline ? 'bg-sky-500' : 'bg-amber-500'}`} />
+                {isDbConnected ? 'PostgreSQL Activo' : isOnline ? 'Caché Local' : 'Offline'}
               </span>
-              <span className="font-mono text-[10px]">Dokploy Ready</span>
+              <span className="font-mono text-[10px] text-slate-400">Dokploy</span>
             </div>
           ) : (
-            <div className="flex justify-center py-0.5" title={isOnline ? 'Conectado a la Base de Datos' : 'Modo Offline PWA'}>
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="flex justify-center py-0.5" title={isDbConnected ? 'PostgreSQL Conectado y Sincronizado' : isOnline ? 'Modo Local / Esperando BD' : 'Modo Offline PWA'}>
+              <span className={`h-2.5 w-2.5 rounded-full ${isDbConnected ? 'bg-emerald-500 animate-pulse' : isOnline ? 'bg-sky-500' : 'bg-amber-500'}`} />
             </div>
           )}
         </div>

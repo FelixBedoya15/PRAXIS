@@ -54,9 +54,19 @@ export default function DashboardPage() {
     const handleProfileUpdated = () => {
       setAgencyProfile(getStoredAgencyProfile());
     };
+    const handleDataSynced = () => {
+      setArls(getStoredARLs());
+      setClients(getStoredClients());
+      setLeads(getStoredLeads());
+      setPilaRecords(getStoredPilaRecords());
+      setFieldVisits(getStoredFieldVisits());
+      setAgencyProfile(getStoredAgencyProfile());
+    };
     window.addEventListener('praxis_profile_updated', handleProfileUpdated);
+    window.addEventListener('praxis_data_synced', handleDataSynced);
     return () => {
       window.removeEventListener('praxis_profile_updated', handleProfileUpdated);
+      window.removeEventListener('praxis_data_synced', handleDataSynced);
     };
   }, []);
 
