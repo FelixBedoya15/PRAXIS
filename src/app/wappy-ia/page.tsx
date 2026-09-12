@@ -105,6 +105,266 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
   timestamp: 'Ahora',
 };
 
+// Formateador de texto enriquecido e inline markdown
+function renderInlineFormatting(text: string, isAi: boolean = true) {
+  const parts: React.ReactNode[] = [];
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g;
+  let match;
+  let lastIndex = 0;
+  let key = 0;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith('**') && token.endsWith('**')) {
+      const boldText = token.slice(2, -2);
+      parts.push(
+        <strong
+          key={key++}
+          className={
+            isAi
+              ? 'font-bold text-slate-900 dark:text-white'
+              : 'font-bold text-white'
+          }
+        >
+          {boldText}
+        </strong>
+      );
+    } else if (token.startsWith('`') && token.endsWith('`')) {
+      const codeText = token.slice(1, -1);
+      parts.push(
+        <code
+          key={key++}
+          className={`px-1.5 py-0.5 rounded font-mono text-[11px] ${
+            isAi
+              ? 'bg-slate-200/70 dark:bg-slate-800 text-blue-600 dark:text-blue-400'
+              : 'bg-blue-700 text-white'
+          }`}
+        >
+          {codeText}
+        </code>
+      );
+    } else if (token.startsWith('*') && token.endsWith('*')) {
+      const italicText = token.slice(1, -1);
+      parts.push(
+        <em key={key++} className="italic">
+          {italicText}
+        </em>
+      );
+    }
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return parts.length > 0 ? parts : text;
+}
+
+// Renderizador estructurado de párrafos, listas y encabezados
+function FormattedMessageContent({ text, isAi }: { text: string; isAi: boolean }) {
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  let currentList: { type: 'bullet' | 'number'; items: string[] } | null = null;
+  let key = 0;
+
+  const flushList = () => {
+    if (!currentList) return;
+    if (currentList.type === 'bullet') {
+      elements.push(
+        <ul key={key++} className="space-y-1.5 my-2 pl-0.5">
+          {currentList.items.map((item, idx) => (
+            <li key={idx} className="flex items-start gap-2 text-xs">
+              <span className="text-blue-500 font-bold shrink-0 mt-0.5">•</span>
+              <span className="flex-1 leading-relaxed">{renderInlineFormatting(item, isAi)}</span>
+            </li>
+          ))}
+        </ul>
+      );
+    } else {
+      elements.push(
+        <ol key={key++} className="space-y-1.5 my-2 pl-4 list-decimal text-xs">
+          {currentList.items.map((item, idx) => (
+            <li key={idx} className="leading-relaxed">
+              <span>{renderInlineFormatting(item, isAi)}</span>
+            </li>
+          ))}
+        </ol>
+      );
+    }
+    currentList = null;
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushList();
+      elements.push(<div key={key++} className="h-1.5" />);
+      return;
+    }
+
+    if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      const itemContent = trimmed.replace(/^[•\-\*]\s+/, '');
+      if (!currentList || currentList.type !== 'bullet') {
+        flushList();
+        currentList = { type: 'bullet', items: [itemContent] };
+      } else {
+        currentList.items.push(itemContent);
+      }
+      return;
+    }
+
+    const numMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
+    if (numMatch) {
+      const itemContent = numMatch[2];
+      if (!currentList || currentList.type !== 'number') {
+        flushList();
+        currentList = { type: 'number', items: [itemContent] };
+      } else {
+        currentList.items.push(itemContent);
+      }
+      return;
+    }
+
+    flushList();
+
+    if (trimmed.startsWith('### ')) {
+      elements.push(
+        <h4 key={key++} className="font-bold text-xs text-slate-900 dark:text-white mt-2 mb-1">
+          {renderInlineFormatting(trimmed.slice(4), isAi)}
+        </h4>
+      );
+    } else if (trimmed.startsWith('## ')) {
+      elements.push(
+        <h3 key={key++} className="font-extrabold text-sm text-slate-900 dark:text-white mt-2 mb-1">
+          {renderInlineFormatting(trimmed.slice(3), isAi)}
+        </h3>
+      );
+    } else if (trimmed.startsWith('# ')) {
+      elements.push(
+        <h2 key={key++} className="font-black text-base text-slate-900 dark:text-white mt-2 mb-1">
+          {renderInlineFormatting(trimmed.slice(2), isAi)}
+        </h2>
+      );
+    } else {
+      elements.push(
+        <p key={key++} className="leading-relaxed">
+          {renderInlineFormatting(trimmed, isAi)}
+        </p>
+      );
+    }
+  });
+
+  flushList();
+
+  return <div className="space-y-1">{elements}</div>;
+}
+
+// Tarjeta de Bienvenida Visual e Interactiva
+function WelcomeMessageCard({ onSelectPrompt }: { onSelectPrompt: (prompt: string) => void }) {
+  const capabilities = [
+    {
+      icon: <Building2 size={16} className="text-blue-600 dark:text-blue-400" />,
+      title: 'Crear y afiliar empresas',
+      desc: 'NIT, ARL, centros de trabajo y clases de riesgo.',
+      prompt: 'Crear cliente Distribuciones del Caribe SAS con NIT 901.888.777-1 en ARL Sura riesgo 3 con 18 trabajadores e IBC de 42 millones en Barranquilla',
+    },
+    {
+      icon: <HardHat size={16} className="text-amber-600 dark:text-amber-400" />,
+      title: 'Agendar visitas técnicas SST',
+      desc: 'Inspecciones y auditorías Res. 0312 de 2019.',
+      prompt: 'Programar visita técnica de auditoría de estándares mínimos 0312 para Transportes Andinos el 22 de septiembre a las 9:00 AM',
+    },
+    {
+      icon: <Stethoscope size={16} className="text-emerald-600 dark:text-emerald-400" />,
+      title: 'Registrar accidentes con FURAT',
+      desc: 'Contingencias laborales, días perdidos y PVE.',
+      prompt: 'Registrar accidente de trabajo con FURAT para el trabajador Carlos Gómez en Constructora Bolívar por contusión en rodilla izquierda con 4 días de incapacidad',
+    },
+    {
+      icon: <Calculator size={16} className="text-indigo-600 dark:text-indigo-400" />,
+      title: 'Liquidar planillas PILA',
+      desc: 'Comisiones ARL, retención 10% y bolsa de retorno SST.',
+      prompt: 'Liquidar planilla PILA para Logística del Norte periodo actual con nómina de 55 millones',
+    },
+    {
+      icon: <Layers size={16} className="text-purple-600 dark:text-purple-400" />,
+      title: 'Consultar consolidados',
+      desc: 'Estadísticas de siniestralidad, empresas y cartera.',
+      prompt: '¿Cuál es el resumen de clientes, distribución por ARL y visitas programadas en la plataforma?',
+    },
+    {
+      icon: <Paperclip size={16} className="text-rose-600 dark:text-rose-400" />,
+      title: 'Analizar archivos adjuntos',
+      desc: 'Sube PDFs, Excel, Word o fotos para extracción directa.',
+      prompt: 'Analizar y procesar los documentos o imágenes adjuntas según la normatividad colombiana',
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Cabecera del Saludo */}
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30 flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+            AGENTE AUTÓNOMO ACTIVO
+          </span>
+          <span className="text-[11px] text-slate-400 font-medium">
+            Res. 0312 • Decreto 768 • Sentencia C-049
+          </span>
+        </div>
+
+        <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-tight">
+          ¡Hola! Soy <span className="text-blue-600 dark:text-blue-400 font-extrabold">PRAXIS IA</span> 🤖
+        </h3>
+        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+          Tu agente autónomo de intermediación de ARL y consultoría SG-SST en Colombia. No solo resuelvo consultas técnicas y legales, sino que <strong>puedo ejecutar acciones directas en la plataforma por ti</strong>:
+        </p>
+      </div>
+
+      {/* Cuadrícula de Capacidades Operativas */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+        {capabilities.map((c, i) => (
+          <div
+            key={i}
+            onClick={() => onSelectPrompt(c.prompt)}
+            className="p-2.5 rounded-xl border text-left transition-all bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-500/50 hover:bg-blue-50/40 dark:hover:bg-slate-800/60 cursor-pointer group shadow-sm"
+          >
+            <div className="flex items-start gap-2.5">
+              <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 shrink-0 group-hover:scale-105 transition-transform">
+                {c.icon}
+              </div>
+              <div className="min-w-0">
+                <h4 className="font-bold text-xs text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                  {c.title}
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5">
+                  {c.desc}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Pregunta de Cierre / Call to Action */}
+      <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-500/30 text-xs font-semibold text-blue-900 dark:text-blue-200 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Sparkles size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+          <span>¿Qué tarea deseas que ejecute hoy?</span>
+        </div>
+        <span className="text-[10px] text-blue-500 dark:text-blue-400 font-mono hidden sm:inline">
+          Haz clic en una opción o escribe abajo ↓
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function WappyIAPage() {
   const [clients, setClients] = useState<ClientCompany[]>([]);
   const [leads, setLeads] = useState<LeadProspect[]>([]);
@@ -711,55 +971,61 @@ export default function WappyIAPage() {
 
               {/* Messages Container */}
               <div className="overflow-y-auto space-y-4 pr-1">
-                {chatMessages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex items-start gap-3 ${
-                      msg.sender === 'USER' ? 'flex-row-reverse' : ''
-                    }`}
-                  >
+                {chatMessages.map((msg) => {
+                  const isWelcome = (msg.id === '1' && msg.sender === 'AI') || (msg.sender === 'AI' && msg.text.includes('¡Hola! Soy **PRAXIS IA**'));
+                  return (
                     <div
-                      className={`h-8 w-8 rounded-xl flex items-center justify-center text-xs shrink-0 ${
-                        msg.sender === 'AI'
-                          ? 'bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30'
-                          : 'bg-slate-800 text-white shadow-sm'
+                      key={msg.id}
+                      className={`flex items-start gap-3 ${
+                        msg.sender === 'USER' ? 'flex-row-reverse' : ''
                       }`}
                     >
-                      {msg.sender === 'AI' ? <Bot size={16} /> : 'FB'}
-                    </div>
+                      <div
+                        className={`h-8 w-8 rounded-xl flex items-center justify-center text-xs shrink-0 ${
+                          msg.sender === 'AI'
+                            ? 'bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30'
+                            : 'bg-slate-800 text-white shadow-sm'
+                        }`}
+                      >
+                        {msg.sender === 'AI' ? <Bot size={16} /> : 'FB'}
+                      </div>
 
-                    <div
-                      className={`p-4 rounded-2xl max-w-[88%] text-xs leading-relaxed ${
-                        msg.sender === 'AI'
-                          ? 'bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200'
-                          : 'bg-blue-600 text-white'
-                      }`}
-                    >
-                      {/* Archivos adjuntos enviados por el usuario */}
-                      {msg.attachments && msg.attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-2 pb-2 border-b border-white/20">
-                          {msg.attachments.map((att) => (
-                            <div
-                              key={att.id}
-                              className="flex items-center gap-1.5 p-1.5 px-2.5 rounded-xl bg-blue-700/60 border border-blue-400/40 text-[11px] font-mono"
-                            >
-                              {att.previewUrl ? (
-                                <img src={att.previewUrl} alt={att.name} className="h-6 w-6 rounded object-cover" />
-                              ) : att.name.toLowerCase().endsWith('.pdf') ? (
-                                <FileText size={13} className="text-red-200" />
-                              ) : att.name.toLowerCase().endsWith('.xlsx') || att.name.toLowerCase().endsWith('.xls') || att.name.toLowerCase().endsWith('.csv') ? (
-                                <FileSpreadsheet size={13} className="text-emerald-200" />
-                              ) : (
-                                <FileText size={13} className="text-blue-200" />
-                              )}
-                              <span className="truncate max-w-[140px] font-medium">{att.name}</span>
-                              <span className="text-[9px] opacity-70">({(att.size / 1024).toFixed(0)}KB)</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <div
+                        className={`p-4 rounded-2xl ${isWelcome ? 'max-w-[96%] sm:max-w-[92%]' : 'max-w-[88%]'} text-xs leading-relaxed ${
+                          msg.sender === 'AI'
+                            ? 'bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200'
+                            : 'bg-blue-600 text-white'
+                        }`}
+                      >
+                        {/* Archivos adjuntos enviados por el usuario */}
+                        {msg.attachments && msg.attachments.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-2 pb-2 border-b border-white/20">
+                            {msg.attachments.map((att) => (
+                              <div
+                                key={att.id}
+                                className="flex items-center gap-1.5 p-1.5 px-2.5 rounded-xl bg-blue-700/60 border border-blue-400/40 text-[11px] font-mono"
+                              >
+                                {att.previewUrl ? (
+                                  <img src={att.previewUrl} alt={att.name} className="h-6 w-6 rounded object-cover" />
+                                ) : att.name.toLowerCase().endsWith('.pdf') ? (
+                                  <FileText size={13} className="text-red-200" />
+                                ) : att.name.toLowerCase().endsWith('.xlsx') || att.name.toLowerCase().endsWith('.xls') || att.name.toLowerCase().endsWith('.csv') ? (
+                                  <FileSpreadsheet size={13} className="text-emerald-200" />
+                                ) : (
+                                  <FileText size={13} className="text-blue-200" />
+                                )}
+                                <span className="truncate max-w-[140px] font-medium">{att.name}</span>
+                                <span className="text-[9px] opacity-70">({(att.size / 1024).toFixed(0)}KB)</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
-                      <div className="whitespace-pre-wrap">{msg.text}</div>
+                        {isWelcome ? (
+                          <WelcomeMessageCard onSelectPrompt={(p) => handleSendPrompt(p)} />
+                        ) : (
+                          <FormattedMessageContent text={msg.text} isAi={msg.sender === 'AI'} />
+                        )}
 
                       {/* Tarjeta Visual de Acción Ejecutada en la Plataforma */}
                       {msg.actionExecuted && (
@@ -844,7 +1110,8 @@ export default function WappyIAPage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                );
+              })}
 
                 {isTyping && (
                   <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 pl-2 animate-pulse">
