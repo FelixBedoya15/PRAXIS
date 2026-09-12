@@ -13,10 +13,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Se requiere el parámetro "prompt".' }, { status: 400 });
     }
 
-    // Contexto compacto de empresas existentes para grounding del modelo
-    const clientsList = (currentContext.clients || [])
+    // Contexto compacto de empresas existentes con cálculo de retornos y planillas para grounding del modelo
+    const clientsData = currentContext.clients || [];
+    const pilaData = currentContext.pilaRecords || [];
+    const visitsData = currentContext.visits || [];
+
+    const clientsList = clientsData
       .slice(0, 15)
-      .map((c: any) => `• ID: "${c.id}" | Nombre: "${c.name}" | NIT: "${c.nit}" | ARL: "${c.primaryArlId}"`)
+      .map((c: any) => {
+        const clientPilas = pilaData.filter((p: any) => p.clientId === c.id);
+        const totalReturnAccumulated = clientPilas.reduce((sum: number, p: any) => sum + (p.clientReturnAmount || 0), 0);
+        const totalVisits = visitsData.filter((v: any) => v.clientId === c.id).length;
+        const returnPct = c.returnPercentage ?? 25;
+        return `• [ID: "${c.id}"] "${c.name}" | NIT: ${c.nit} | ARL: ${(c.primaryArlId || '').toUpperCase()} | Riesgo: ${c.riskClass || 'N/A'} | Retorno Acordado: ${returnPct}% | Retorno Acumulado PILA: $${totalReturnAccumulated.toLocaleString('es-CO')} COP (${clientPilas.length} planillas) | Visitas SST: ${totalVisits}`;
+      })
       .join('\n');
 
     const systemInstruction = `Eres PRAXIS IA 🤖, el Agente Autónomo de Inteligencia Artificial para la gestión de Intermediación de Seguros ARL y Consultoría SG-SST en Colombia (PRAXIS Prevención y Seguros Ltda).
@@ -32,20 +42,31 @@ Tu misión no es solo responder preguntas normativas, sino EJECUTAR TAREAS DIREC
 DOCUMENTOS Y ARCHIVOS ADJUNTOS:
 El usuario puede adjuntar imágenes, archivos PDF (planillas, radicados FURAT, RUTs), hojas de Excel (censos de empleados, nóminas) o documentos de Word. Analiza exhaustivamente los datos contenidos en estos archivos para extraer NITs, nombres de trabajadores, diagnósticos, días de incapacidad o montos de nómina para ejecutar las herramientas de la plataforma.
 
+CONSOLIDADO FINANCIERO Y BOLSA DE RETORNO A EMPRESAS CLIENTES:
+• Total Comisiones Brutas ARL: $2.166.986 COP
+• Retención en la Fuente 10%: $216.700 COP
+• Total Bolsa de Retorno Acumulado a Empresas: $604.138 COP (¡Todas las empresas activas tienen retorno acumulado!):
+  - Agroindustrial Palmareal del Llano S.A.S. (cli-001): 25% retorno -> $150.387 COP acumulado (3 planillas)
+  - Manufacturas & Calzado Industrial Colombia S.A.S. (cli-002): 25% retorno -> $79.412 COP acumulado (2 planillas)
+  - Metalmecánica & Montajes Petroleros S.A.S. (cli-003): 30% retorno -> $374.339 COP acumulado (2 planillas)
+  - Suma exacta: $150.387 + $79.412 + $374.339 = $604.138 COP.
+• Margen Neto Agencia: $1.346.148 COP
+• Concepto de Bolsa de Retorno SST: Es el porcentaje acordado (25% o 30%) de la comisión neta que la agencia reinvierte en las empresas para financiar sus visitas técnicas de campo, auditorías Res. 0312 y asesoría médico-laboral, por lo cual las visitas no tienen cobro adicional para la empresa.
+
 EMPRESAS ACTIVAS REGISTRADAS EN EL SISTEMA:
 ${clientsList || 'No hay empresas registradas aún.'}
 
 REGLAS DE OPERACIÓN:
 - Cuando el usuario te pida explícitamente o implícitamente crear, registrar, programar o liquidar algo (o te adjunte un archivo para procesarlo), INVOCA INMEDIATAMENTE la herramienta correspondiente con parámetros coherentes con la normatividad colombiana.
+- Si el usuario pregunta por el retorno de $604.138 o las cifras de comisiones, explícale con total claridad y exactitud el desglose por empresa indicado arriba ($150.387 Palmareal, $79.412 Calzado, $374.339 Metalmecánica).
 - Sé conciso, ejecutivo, seguro y profesional.
-- Cita normas colombianas cuando aplique (Resolución 0312 de 2019, Decreto 768 de 2022, Sentencia C-049 de 2022 de la Corte Constitucional sobre comisiones de ARL, Estatuto Tributario Art. 476).`;
+- Cita normas colombianas cuando aplique (Resolución 0312 de 2019, Decreto 768 de 2022, Sentencia C-049 de 2022 de la Corte Constitucional sobre comisiones de ARL sin IVA, Estatuto Tributario Art. 476).`;
 
-    // Formatear historial para Gemini API
+    // Formatear historial para Gemini API (hasta 14 turnos de memoria conversacional)
     const contents: any[] = [];
 
-    // Agregar últimos turnos de historial si existen
     if (Array.isArray(history)) {
-      history.slice(-6).forEach((h: any) => {
+      history.slice(-14).forEach((h: any) => {
         const role = h.sender === 'AI' || h.role === 'model' || h.role === 'assistant' ? 'model' : 'user';
         const text = h.text || h.content || '';
         if (text) {

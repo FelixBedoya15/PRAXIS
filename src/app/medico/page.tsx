@@ -28,7 +28,9 @@ import {
   Filter,
   Check,
   HardHat,
-  Calculator
+  Calculator,
+  Edit2,
+  Trash2
 } from 'lucide-react';
 import { getStoredClients, getStoredMedicalRecords, saveStoredMedicalRecords, getStoredAgencyProfile } from '@/lib/storage';
 import { ClientCompany, MedicalRecord, AgencyProfile } from '@/types';
@@ -59,6 +61,24 @@ export default function IndicadoresSSTPage() {
   const [newMedicalNotes, setNewMedicalNotes] = useState<string>('Atención médica inicial. Manejo ambulatorio y recomendaciones ergonómicas.');
   const [newDate, setNewDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [agencyProfile, setAgencyProfile] = useState<AgencyProfile | null>(null);
+
+  // Edit Record Modal & Operations
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [editingRecord, setEditingRecord] = useState<MedicalRecord | null>(null);
+  const [editClientId, setEditClientId] = useState<string>('');
+  const [editIncidentType, setEditIncidentType] = useState<MedicalRecord['incidentType']>('ACCIDENTE_TRABAJO');
+  const [editEmployeeDocument, setEditEmployeeDocument] = useState<string>('');
+  const [editEmployeeName, setEditEmployeeName] = useState<string>('');
+  const [editEmployeeRole, setEditEmployeeRole] = useState<string>('');
+  const [editDiagnosisCie10, setEditDiagnosisCie10] = useState<string>('S61.0');
+  const [editDiagnosisDescription, setEditDiagnosisDescription] = useState<string>('');
+  const [editDaysLost, setEditDaysLost] = useState<number>(0);
+  const [editFuratFurepCode, setEditFuratFurepCode] = useState<string>('');
+  const [editPveProgram, setEditPveProgram] = useState<MedicalRecord['pveProgram']>('NINGUNO');
+  const [editMedicalNotes, setEditMedicalNotes] = useState<string>('');
+  const [editDate, setEditDate] = useState<string>('');
+  const [editDoctorName, setEditDoctorName] = useState<string>('');
+  const [successToast, setSuccessToast] = useState<string | null>(null);
 
   useEffect(() => {
     const cls = getStoredClients();
@@ -199,6 +219,81 @@ export default function IndicadoresSSTPage() {
     setMedicalRecords(updated);
     saveStoredMedicalRecords(updated);
     setShowNewModal(false);
+    setSuccessToast(`✅ Novedad médica de ${newRecord.employeeName} radicada exitosamente.`);
+    setTimeout(() => setSuccessToast(null), 4000);
+  };
+
+  const openEditRecord = (record: MedicalRecord) => {
+    setEditingRecord(record);
+    setEditClientId(record.clientId);
+    setEditIncidentType(record.incidentType);
+    setEditEmployeeDocument(record.employeeDocument);
+    setEditEmployeeName(record.employeeName);
+    setEditEmployeeRole(record.employeeRole);
+    setEditDiagnosisCie10(record.diagnosisCie10);
+    setEditDiagnosisDescription(record.diagnosisDescription);
+    setEditDaysLost(record.daysLost);
+    setEditFuratFurepCode(record.furatFurepCode || '');
+    setEditPveProgram(record.pveProgram || 'NINGUNO');
+    setEditMedicalNotes(record.medicalNotes || '');
+    setEditDate(record.date);
+    setEditDoctorName(record.createdByDoctor || 'Dra. Marcela Salazar (Médico Especialista SST - Reg. 8841)');
+    setShowEditModal(true);
+  };
+
+  const handleSaveEditedRecord = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRecord) return;
+    const client = clients.find((c) => c.id === editClientId) || { id: editClientId, name: editingRecord.clientName };
+
+    const updatedRecord: MedicalRecord = {
+      ...editingRecord,
+      clientId: client.id,
+      clientName: client.name,
+      incidentType: editIncidentType,
+      employeeDocument: editEmployeeDocument || 'CC Sin especificar',
+      employeeName: editEmployeeName || 'Trabajador no identificado',
+      employeeRole: editEmployeeRole || 'Operario',
+      diagnosisCie10: editDiagnosisCie10.toUpperCase(),
+      diagnosisDescription: editDiagnosisDescription,
+      daysLost: editDaysLost,
+      furatFurepCode: editFuratFurepCode,
+      pveProgram: editPveProgram,
+      medicalNotes: editMedicalNotes,
+      date: editDate,
+      createdByDoctor: editDoctorName,
+    };
+
+    const updatedList = medicalRecords.map((r) => (r.id === editingRecord.id ? updatedRecord : r));
+    setMedicalRecords(updatedList);
+    saveStoredMedicalRecords(updatedList);
+
+    if (viewingRecord && viewingRecord.id === editingRecord.id) {
+      setViewingRecord(updatedRecord);
+    }
+
+    setShowEditModal(false);
+    setSuccessToast(`✅ Ficha técnica de ${updatedRecord.employeeName} actualizada con éxito.`);
+    setTimeout(() => setSuccessToast(null), 4000);
+  };
+
+  const handleDeleteRecord = (id: string, name: string) => {
+    if (!window.confirm(`¿Estás seguro de eliminar el registro médico de "${name}"? Esta acción no se puede revertir.`)) {
+      return;
+    }
+    const updatedList = medicalRecords.filter((r) => r.id !== id);
+    setMedicalRecords(updatedList);
+    saveStoredMedicalRecords(updatedList);
+
+    if (viewingRecord && viewingRecord.id === id) {
+      setViewingRecord(null);
+    }
+    if (editingRecord && editingRecord.id === id) {
+      setShowEditModal(false);
+    }
+
+    setSuccessToast(`🗑️ Registro de ${name} eliminado del sistema.`);
+    setTimeout(() => setSuccessToast(null), 4000);
   };
 
   // Grouping by CIE-10 for visual chart
@@ -254,6 +349,22 @@ export default function IndicadoresSSTPage() {
           </button>
         </div>
       </div>
+
+      {/* Alerta de Éxito / Feedback */}
+      {successToast && (
+        <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex items-center justify-between shadow-sm animate-fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={16} className="shrink-0" />
+            <span>{successToast}</span>
+          </div>
+          <button
+            onClick={() => setSuccessToast(null)}
+            className="p-1 hover:bg-emerald-500/20 rounded-lg text-emerald-700 dark:text-emerald-400"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Global Filter Bar */}
       <div className="p-4 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row items-center justify-between gap-3 shadow-sm">
@@ -673,12 +784,20 @@ export default function IndicadoresSSTPage() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => setViewingRecord(r)}
-                  className="w-full py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/80 hover:bg-blue-600 hover:text-white text-blue-600 dark:text-blue-400 text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
-                >
-                  <Eye size={13} /> <span>Ver Ficha Técnica</span>
-                </button>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    onClick={() => setViewingRecord(r)}
+                    className="py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/80 hover:bg-blue-600 hover:text-white text-blue-600 dark:text-blue-400 text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                  >
+                    <Eye size={13} /> <span>Ver Ficha</span>
+                  </button>
+                  <button
+                    onClick={() => openEditRecord(r)}
+                    className="py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/80 hover:bg-amber-600 hover:text-white text-amber-700 dark:text-amber-400 text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                  >
+                    <Edit2 size={13} /> <span>Editar</span>
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -737,13 +856,29 @@ export default function IndicadoresSSTPage() {
                     {r.furatFurepCode || 'No aplica'}
                   </td>
                   <td className="py-3 px-4 text-center">
-                    <button
-                      onClick={() => setViewingRecord(r)}
-                      className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/80 hover:bg-blue-600 hover:text-white text-blue-600 dark:text-blue-400 text-[11px] font-bold transition-all shadow-sm flex items-center gap-1 mx-auto"
-                      title="Abrir Ficha Técnica Epidemiológica"
-                    >
-                      <Eye size={13} /> <span>Ver Ficha</span>
-                    </button>
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        onClick={() => setViewingRecord(r)}
+                        className="px-2.5 py-1 rounded-xl bg-blue-50 dark:bg-blue-950/80 hover:bg-blue-600 hover:text-white text-blue-600 dark:text-blue-400 text-[11px] font-bold transition-all shadow-sm flex items-center gap-1"
+                        title="Abrir Ficha Técnica Epidemiológica"
+                      >
+                        <Eye size={12} /> <span>Ver</span>
+                      </button>
+                      <button
+                        onClick={() => openEditRecord(r)}
+                        className="px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-950/80 hover:bg-amber-600 hover:text-white text-amber-700 dark:text-amber-400 text-[11px] font-bold transition-all shadow-sm flex items-center gap-1"
+                        title="Editar Caso Médico"
+                      >
+                        <Edit2 size={12} /> <span>Editar</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteRecord(r.id, r.employeeName)}
+                        className="p-1 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors"
+                        title="Eliminar registro"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -756,12 +891,23 @@ export default function IndicadoresSSTPage() {
       {viewingRecord && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 printable-modal-overlay">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl max-w-2xl w-full p-5 sm:p-6 space-y-4 shadow-2xl relative max-h-[92vh] overflow-y-auto printable-modal-box">
-            <button
-              onClick={() => setViewingRecord(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-900 dark:hover:text-white p-1 rounded-lg no-print cursor-pointer"
-            >
-              <X size={18} />
-            </button>
+            <div className="absolute top-4 right-4 flex items-center gap-2 no-print">
+              <button
+                type="button"
+                onClick={() => openEditRecord(viewingRecord)}
+                className="px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/80 hover:bg-amber-100 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Editar datos de esta ficha médica"
+              >
+                <Edit2 size={13} />
+                <span>Editar Ficha</span>
+              </button>
+              <button
+                onClick={() => setViewingRecord(null)}
+                className="text-slate-400 hover:text-slate-900 dark:hover:text-white p-1 rounded-lg no-print cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
             {/* Document Header */}
             <div className="border-b border-slate-200 dark:border-slate-800 print:border-slate-900 pb-3">
@@ -915,21 +1061,38 @@ export default function IndicadoresSSTPage() {
             </div>
 
             {/* Actions */}
-            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800 no-print">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-3 border-t border-slate-200 dark:border-slate-800 no-print">
               <button
                 type="button"
-                onClick={() => setViewingRecord(null)}
-                className="px-4 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-semibold text-xs cursor-pointer"
+                onClick={() => handleDeleteRecord(viewingRecord.id, viewingRecord.employeeName)}
+                className="w-full sm:w-auto px-3.5 py-2 rounded-2xl bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-600 dark:text-rose-400 font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-rose-200 dark:border-rose-900/50"
               >
-                Cerrar
+                <Trash2 size={13} />
+                <span>Eliminar Registro</span>
               </button>
-              <button
-                type="button"
-                onClick={() => printDocumentById('ficha-medica-sheet', `Ficha Medica - ${viewingRecord.employeeName}`)}
-                className="px-4 py-2 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/30 cursor-pointer"
-              >
-                <Printer size={14} /> Imprimir Ficha Técnica / PDF
-              </button>
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => openEditRecord(viewingRecord)}
+                  className="px-4 py-2 rounded-2xl bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Edit2 size={13} /> Editar Ficha
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewingRecord(null)}
+                  className="px-4 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-semibold text-xs cursor-pointer"
+                >
+                  Cerrar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => printDocumentById('ficha-medica-sheet', `Ficha Medica - ${viewingRecord.employeeName}`)}
+                  className="px-4 py-2 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/30 cursor-pointer"
+                >
+                  <Printer size={14} /> Imprimir Ficha Técnica / PDF
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1107,6 +1270,221 @@ export default function IndicadoresSSTPage() {
                   className="px-5 py-2 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-md shadow-blue-600/30"
                 >
                   Guardar Novedad
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDITAR FICHA TÉCNICA / CASO MÉDICO */}
+      {showEditModal && editingRecord && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl max-w-xl w-full p-5 sm:p-6 space-y-4 shadow-2xl relative max-h-[92vh] overflow-y-auto">
+            <button
+              onClick={() => setShowEditModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-900 dark:hover:text-white p-1 rounded-lg cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                <Edit2 size={18} />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 block">
+                  EDICIÓN OFICIAL DE FICHA TÉCNICA • REG: MED-{editingRecord.id.toUpperCase()}
+                </span>
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                  Modificar Registro de Accidente o Ausentismo
+                </h3>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveEditedRecord} className="space-y-3.5 text-xs">
+              <div>
+                <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">Empresa Cliente</label>
+                <select
+                  value={editClientId}
+                  onChange={(e) => setEditClientId(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 font-bold"
+                >
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.employeeCount} trab.)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">Tipo de Novedad</label>
+                  <select
+                    value={editIncidentType}
+                    onChange={(e) => setEditIncidentType(e.target.value as MedicalRecord['incidentType'])}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 font-bold"
+                  >
+                    <option value="ACCIDENTE_TRABAJO">Accidente de Trabajo (AT)</option>
+                    <option value="AUSENTISMO_COMUN">Ausentismo Común (Enfermedad General)</option>
+                    <option value="ENFERMEDAD_LABORAL">Enfermedad Laboral (EL)</option>
+                    <option value="EXAMEN_MEDICO">Examen Periódico Ocupacional</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">Fecha del Evento</label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 font-mono"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">Cédula del Trabajador</label>
+                  <input
+                    type="text"
+                    placeholder="CC 1.047..."
+                    value={editEmployeeDocument}
+                    onChange={(e) => setEditEmployeeDocument(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200"
+                    required
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">Nombre Completo</label>
+                  <input
+                    type="text"
+                    placeholder="Ej. Juan Carlos Ramírez"
+                    value={editEmployeeName}
+                    onChange={(e) => setEditEmployeeName(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 font-bold"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">Cargo / Puesto</label>
+                  <input
+                    type="text"
+                    placeholder="Ej. Operario de Producción"
+                    value={editEmployeeRole}
+                    onChange={(e) => setEditEmployeeRole(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">Días de Incapacidad</label>
+                  <input
+                    type="number"
+                    value={editDaysLost}
+                    onChange={(e) => setEditDaysLost(parseInt(e.target.value, 10) || 0)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 font-mono font-bold"
+                    min={0}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">Código CIE-10</label>
+                  <input
+                    type="text"
+                    placeholder="Ej. S61.0, M54.5, J06.9"
+                    value={editDiagnosisCie10}
+                    onChange={(e) => setEditDiagnosisCie10(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 font-mono font-bold uppercase"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">Radicado FURAT / FUREP</label>
+                  <input
+                    type="text"
+                    placeholder="FURAT-2026-..."
+                    value={editFuratFurepCode}
+                    onChange={(e) => setEditFuratFurepCode(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">Programa PVE Asignado</label>
+                  <select
+                    value={editPveProgram}
+                    onChange={(e) => setEditPveProgram(e.target.value as MedicalRecord['pveProgram'])}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 font-semibold"
+                  >
+                    <option value="NINGUNO">Ninguno / No Aplica</option>
+                    <option value="ERGONOMICO">PVE Osteomuscular / Ergonómico</option>
+                    <option value="RUIDO">PVE Conservación Auditiva (Ruido)</option>
+                    <option value="BIOMECANICO">PVE Biomecánico</option>
+                    <option value="PSICOSOCIAL">PVE Riesgo Psicosocial</option>
+                    <option value="QUIMICO">PVE Riesgo Químico</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">Médico Especialista SST</label>
+                  <input
+                    type="text"
+                    value={editDoctorName}
+                    onChange={(e) => setEditDoctorName(e.target.value)}
+                    placeholder="Nombre del Médico y Reg."
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">Descripción del Diagnóstico</label>
+                <input
+                  type="text"
+                  value={editDiagnosisDescription}
+                  onChange={(e) => setEditDiagnosisDescription(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">
+                  Notas de Manejo y Recomendaciones Laborales
+                </label>
+                <textarea
+                  rows={3}
+                  value={editMedicalNotes}
+                  onChange={(e) => setNewMedicalNotes ? setEditMedicalNotes(e.target.value) : null}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl p-2.5 text-slate-900 dark:text-slate-200"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-2xl bg-amber-600 hover:bg-amber-500 text-white font-bold shadow-md shadow-amber-600/30 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Edit2 size={14} />
+                  <span>Guardar Cambios</span>
                 </button>
               </div>
             </form>

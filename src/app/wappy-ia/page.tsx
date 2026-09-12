@@ -29,7 +29,10 @@ import {
   FileText,
   Image as ImageIcon,
   X,
-  Upload
+  Upload,
+  Plus,
+  Trash2,
+  History
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
@@ -47,6 +50,9 @@ import {
   saveStoredWhatsAppMessages,
   getStoredARLs,
   getStoredGeminiKeys,
+  ChatSession,
+  getStoredChatSessions,
+  saveStoredChatSessions,
 } from '@/lib/storage';
 import {
   ClientCompany,
@@ -82,6 +88,23 @@ interface ChatMessage {
   attachments?: AttachedFile[];
 }
 
+const DEFAULT_WELCOME_MESSAGE: ChatMessage = {
+  id: '1',
+  sender: 'AI',
+  text: `¡Hola! Soy **PRAXIS IA** 🤖, el agente autónomo de intermediación de ARL y consultoría SG-SST en Colombia.
+
+No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decreto 768/2022, Res. 0312/2019), sino que **puedo ejecutar acciones directas en la plataforma por ti**:
+• 🏢 **Crear y afiliar empresas** con NIT, ARL y clases de riesgo.
+• 📅 **Agendar y registrar visitas técnicas SST** o auditorías Res. 0312.
+• 🩺 **Registrar accidentes laborales con FURAT**, ausentismo o enfermedad.
+• 💰 **Liquidar planillas PILA** y calcular comisiones y bolsa de retorno SST.
+• 📊 **Consultar consolidados y estadísticas** de la agencia.
+• 📎 **Analizar archivos adjuntos:** Puedes subir **PDFs (planillas, FURATs), Excel (nóminas), Word o imágenes** para extraer sus datos y procesarlos automáticamente.
+
+¿Qué tarea deseas que ejecute hoy?`,
+  timestamp: 'Ahora',
+};
+
 export default function WappyIAPage() {
   const [clients, setClients] = useState<ClientCompany[]>([]);
   const [leads, setLeads] = useState<LeadProspect[]>([]);
@@ -94,30 +117,20 @@ export default function WappyIAPage() {
   const [selectedModel, setSelectedModel] = useState<string>('gemini-3.5-flash-lite');
   const [activeTab, setActiveTab] = useState<'ASSISTANT' | 'WHATSAPP'>('ASSISTANT');
 
+  // Multi-Session Chat History State (Persistencia en LocalStorage)
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string>('');
+  const [sidebarTab, setSidebarTab] = useState<'HISTORIAL' | 'TAREAS'>('HISTORIAL');
+
   // File Attachments State (LibreChat Style)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // AI Assistant Chat State
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: '1',
-      sender: 'AI',
-      text: `¡Hola! Soy **PRAXIS IA** 🤖, el agente autónomo de intermediación de ARL y consultoría SG-SST en Colombia.
+  // Active Session & Chat Messages
+  const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
+  const chatMessages: ChatMessage[] = activeSession ? (activeSession.messages as ChatMessage[]) : [DEFAULT_WELCOME_MESSAGE];
 
-No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decreto 768/2022, Res. 0312/2019), sino que **puedo ejecutar acciones directas en la plataforma por ti**:
-• 🏢 **Crear y afiliar empresas** con NIT, ARL y clases de riesgo.
-• 📅 **Agendar y registrar visitas técnicas SST** o auditorías Res. 0312.
-• 🩺 **Registrar accidentes laborales con FURAT**, ausentismo o enfermedad.
-• 💰 **Liquidar planillas PILA** y calcular comisiones y bolsa de retorno SST.
-• 📊 **Consultar consolidados y estadísticas** de la agencia.
-• 📎 **Analizar archivos adjuntos:** Puedes subir **PDFs (planillas, FURATs), Excel (nóminas), Word o imágenes** para extraer sus datos y procesarlos automáticamente.
-
-¿Qué tarea deseas que ejecute hoy?`,
-      timestamp: 'Ahora',
-    },
-  ]);
   const [inputPrompt, setInputPrompt] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -259,10 +272,81 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
       setSelectedModel(savedModel);
     }
 
+    // Cargar historial de sesiones de chat persistentes
+    const storedSessions = getStoredChatSessions();
+    if (storedSessions && storedSessions.length > 0) {
+      setSessions(storedSessions);
+      setActiveSessionId((prev) => {
+        if (prev && storedSessions.some((s) => s.id === prev)) return prev;
+        return storedSessions[0].id;
+      });
+    } else {
+      const defaultSession: ChatSession = {
+        id: `chat-${Date.now()}`,
+        title: 'Nueva Conversación',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messages: [DEFAULT_WELCOME_MESSAGE],
+      };
+      setSessions([defaultSession]);
+      setActiveSessionId(defaultSession.id);
+      saveStoredChatSessions([defaultSession]);
+    }
+
     if (cls.length > 0 && !selectedClientId) {
       setSelectedClientId(cls[0].id);
       updateTemplatePreview(cls[0], 'RECORDATORIO_PILA');
     }
+  };
+
+  const handleCreateNewChat = () => {
+    const newId = `chat-${Date.now()}`;
+    const newSession: ChatSession = {
+      id: newId,
+      title: 'Nueva Conversación',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages: [DEFAULT_WELCOME_MESSAGE],
+    };
+    const updated = [newSession, ...sessions];
+    setSessions(updated);
+    setActiveSessionId(newId);
+    saveStoredChatSessions(updated);
+    setAttachedFiles([]);
+    setInputPrompt('');
+  };
+
+  const handleSelectSession = (sessionId: string) => {
+    setActiveSessionId(sessionId);
+    setAttachedFiles([]);
+    setInputPrompt('');
+  };
+
+  const handleDeleteChatSession = (sessionId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (sessions.length <= 1) {
+      handleClearCurrentChat();
+      return;
+    }
+    const updated = sessions.filter((s) => s.id !== sessionId);
+    setSessions(updated);
+    saveStoredChatSessions(updated);
+    if (activeSessionId === sessionId) {
+      setActiveSessionId(updated[0].id);
+    }
+  };
+
+  const handleClearCurrentChat = () => {
+    if (!activeSession) return;
+    const updatedSession: ChatSession = {
+      ...activeSession,
+      title: 'Nueva Conversación',
+      updatedAt: new Date().toISOString(),
+      messages: [DEFAULT_WELCOME_MESSAGE],
+    };
+    const updated = sessions.map((s) => (s.id === activeSession.id ? updatedSession : s));
+    setSessions(updated);
+    saveStoredChatSessions(updated);
   };
 
   useEffect(() => {
@@ -354,7 +438,39 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
       attachments: filesToSend,
     };
 
-    setChatMessages((prev) => [...prev, userMsg]);
+    // Determinar o inicializar sesión activa
+    let currentSession = activeSession;
+    let baseSessions = [...sessions];
+    if (!currentSession) {
+      const newId = `chat-${Date.now()}`;
+      currentSession = {
+        id: newId,
+        title: 'Nueva Conversación',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messages: [DEFAULT_WELCOME_MESSAGE],
+      };
+      baseSessions = [currentSession, ...baseSessions];
+      setActiveSessionId(newId);
+    }
+
+    const isFirstUserMessage = currentSession.title === 'Nueva Conversación' && !!textToSend.trim();
+    const sessionTitle = isFirstUserMessage
+      ? (textToSend.trim().length > 36 ? textToSend.trim().slice(0, 36) + '...' : textToSend.trim())
+      : currentSession.title;
+
+    const messagesWithUser = [...currentSession.messages, userMsg];
+    const sessionWithUser: ChatSession = {
+      ...currentSession,
+      title: sessionTitle,
+      updatedAt: new Date().toISOString(),
+      messages: messagesWithUser,
+    };
+
+    const sessionsWithUser = baseSessions.map((s) => (s.id === currentSession!.id ? sessionWithUser : s));
+    setSessions(sessionsWithUser);
+    saveStoredChatSessions(sessionsWithUser);
+
     setInputPrompt('');
     setIsTyping(true);
 
@@ -372,7 +488,7 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: textToSend || 'Analiza y procesa los documentos o imágenes adjuntas en la plataforma según la normatividad.',
-          history: chatMessages.slice(-6).map((m) => ({ sender: m.sender, text: m.text })),
+          history: messagesWithUser.slice(-14).map((m) => ({ sender: m.sender, text: m.text })),
           customKeys: getStoredGeminiKeys(),
           preferredModel: selectedModel,
           attachments: filesToSend,
@@ -412,7 +528,6 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
           setPilaRecords(updated);
         }
 
-        // Emitir evento global de sincronización para que otras pantallas (Dashboard, Clientes, etc.) se actualicen
         window.dispatchEvent(new Event('praxis_data_synced'));
       }
 
@@ -427,7 +542,18 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
         isFallback: result.isFallback,
       };
 
-      setChatMessages((prev) => [...prev, aiMsg]);
+      const messagesWithAi = [...messagesWithUser, aiMsg];
+      const finalSession: ChatSession = {
+        ...sessionWithUser,
+        updatedAt: new Date().toISOString(),
+        messages: messagesWithAi,
+      };
+
+      setSessions((prev) => {
+        const updated = prev.map((s) => (s.id === finalSession.id ? finalSession : s));
+        saveStoredChatSessions(updated);
+        return updated;
+      });
     } catch (err: any) {
       const errorMsg: ChatMessage = {
         id: `msg-err-${Date.now()}`,
@@ -435,7 +561,19 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
         text: `⚠️ **Error en procesamiento:** ${err.message || 'No fue posible completar la solicitud.'}\n\nPuedes configurar o renovar tus claves API de Gemini en el menú de **Perfil ➔ Claves de IA**.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
-      setChatMessages((prev) => [...prev, errorMsg]);
+
+      const messagesWithError = [...messagesWithUser, errorMsg];
+      const errorSession: ChatSession = {
+        ...sessionWithUser,
+        updatedAt: new Date().toISOString(),
+        messages: messagesWithError,
+      };
+
+      setSessions((prev) => {
+        const updated = prev.map((s) => (s.id === errorSession.id ? errorSession : s));
+        saveStoredChatSessions(updated);
+        return updated;
+      });
     } finally {
       setIsTyping(false);
     }
@@ -534,6 +672,43 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
           {/* Main Chat Stream (2 Columns) */}
           <div className="lg:col-span-2 space-y-4">
             <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 flex flex-col h-[600px] justify-between shadow-sm">
+              {/* Barra Superior de la Sesión de Chat Activa */}
+              <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-200 dark:border-slate-800 shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                    <MessageSquare size={14} />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-xs text-slate-900 dark:text-white truncate max-w-[200px] sm:max-w-[340px]">
+                      {activeSession?.title || 'Conversación Activa'}
+                    </h3>
+                    <span className="text-[10px] text-slate-400">
+                      {chatMessages.length} mensaje(s) • Memoria persistente
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleCreateNewChat}
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                    title="Iniciar una nueva sesión de chat"
+                  >
+                    <Plus size={13} />
+                    <span>Nuevo Chat</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearCurrentChat}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                    title="Reiniciar conversación actual"
+                  >
+                    <RotateCcw size={14} />
+                  </button>
+                </div>
+              </div>
+
               {/* Messages Container */}
               <div className="overflow-y-auto space-y-4 pr-1">
                 {chatMessages.map((msg) => (
@@ -791,87 +966,177 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
             </div>
           </div>
 
-          {/* Quick Actions & Model Architecture (Right Column) */}
+          {/* Quick Actions & Session History (Right Column) */}
           <div className="space-y-4">
-            {/* Quick Prompt Cards */}
-            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-3 shadow-sm">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                <Zap size={14} className="text-amber-500" /> Tareas Autónomas de Ejemplo
-              </h3>
-
-              <div className="space-y-2 text-left">
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-3 shadow-sm">
+              {/* Tab Selector Historial vs Tareas */}
+              <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
                 <button
-                  onClick={() => handleSendPrompt('Crear cliente Distribuciones del Caribe SAS con NIT 901.888.777-1 en ARL Sura riesgo 3 con 18 trabajadores e IBC de 42 millones en Barranquilla')}
-                  className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
+                  type="button"
+                  onClick={() => setSidebarTab('HISTORIAL')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    sidebarTab === 'HISTORIAL'
+                      ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
                 >
-                  <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold text-[11px] mb-0.5">
-                    <Building2 size={13} /> Crear Empresa Afiliada
-                  </div>
-                  <p className="text-[10px] text-slate-500 line-clamp-2">
-                    "Crear cliente Distribuciones del Caribe SAS con NIT 901.888.777-1 en ARL Sura..."
-                  </p>
+                  <History size={13} />
+                  <span>Historial ({sessions.length})</span>
                 </button>
-
                 <button
-                  onClick={() => handleSendPrompt('Programar visita técnica de auditoría de estándares mínimos 0312 para Transportes Andinos el 22 de septiembre a las 9:00 AM')}
-                  className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-amber-500/50 hover:bg-amber-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
+                  type="button"
+                  onClick={() => setSidebarTab('TAREAS')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    sidebarTab === 'TAREAS'
+                      ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                  }`}
                 >
-                  <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold text-[11px] mb-0.5">
-                    <HardHat size={13} /> Programar Auditoría SST
-                  </div>
-                  <p className="text-[10px] text-slate-500 line-clamp-2">
-                    "Programar visita técnica de auditoría de estándares mínimos 0312 para Transportes Andinos..."
-                  </p>
-                </button>
-
-                <button
-                  onClick={() => handleSendPrompt('Registrar accidente de trabajo con FURAT para el trabajador Carlos Gómez en Constructora Bolívar por contusión en rodilla izquierda con 4 días de incapacidad')}
-                  className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
-                >
-                  <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold text-[11px] mb-0.5">
-                    <Stethoscope size={13} /> Radicar Accidente FURAT
-                  </div>
-                  <p className="text-[10px] text-slate-500 line-clamp-2">
-                    "Registrar accidente de trabajo con FURAT para Carlos Gómez en Constructora Bolívar..."
-                  </p>
-                </button>
-
-                <button
-                  onClick={() => handleSendPrompt('Liquidar planilla PILA para Logística del Norte periodo actual con nómina de 55 millones')}
-                  className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-indigo-500/50 hover:bg-indigo-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
-                >
-                  <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-bold text-[11px] mb-0.5">
-                    <Calculator size={13} /> Liquidar Planilla PILA
-                  </div>
-                  <p className="text-[10px] text-slate-500 line-clamp-2">
-                    "Liquidar planilla PILA para Logística del Norte periodo actual con nómina de 55 millones..."
-                  </p>
-                </button>
-
-                <button
-                  onClick={() => handleSendPrompt('¿Cuál es el resumen de clientes, distribución por ARL y visitas programadas en la plataforma?')}
-                  className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-purple-500/50 hover:bg-purple-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
-                >
-                  <div className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 font-bold text-[11px] mb-0.5">
-                    <Layers size={13} /> Resumen Ejecutivo Plataforma
-                  </div>
-                  <p className="text-[10px] text-slate-500 line-clamp-2">
-                    "¿Cuál es el resumen de clientes, distribución por ARL y visitas programadas...?"
-                  </p>
-                </button>
-
-                <button
-                  onClick={() => handleSendPrompt('¿Por qué las comisiones de ARL no tienen IVA según la Sentencia C-049 de 2022 y el Estatuto Tributario?')}
-                  className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
-                >
-                  <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold text-[11px] mb-0.5">
-                    <Shield size={13} /> Exclusión Legal de IVA (C-049/2022)
-                  </div>
-                  <p className="text-[10px] text-slate-500 line-clamp-2">
-                    "¿Por qué las comisiones de ARL no tienen IVA según la Sentencia C-049 de 2022...?"
-                  </p>
+                  <Zap size={13} />
+                  <span>Tareas Rápidas</span>
                 </button>
               </div>
+
+              {/* CONTENIDO TAB 1: HISTORIAL DE SESIONES */}
+              {sidebarTab === 'HISTORIAL' && (
+                <div className="space-y-2.5">
+                  <button
+                    type="button"
+                    onClick={handleCreateNewChat}
+                    className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Plus size={14} />
+                    <span>Iniciar Nuevo Chat</span>
+                  </button>
+
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                    {sessions.map((sess) => {
+                      const isActive = sess.id === (activeSession?.id || activeSessionId);
+                      const msgCount = sess.messages ? sess.messages.length : 0;
+                      const dateStr = new Date(sess.updatedAt || sess.createdAt).toLocaleDateString([], {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      });
+
+                      return (
+                        <div
+                          key={sess.id}
+                          onClick={() => handleSelectSession(sess.id)}
+                          className={`group p-2.5 rounded-xl border text-left cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                            isActive
+                              ? 'bg-blue-50/80 dark:bg-blue-950/50 border-blue-400 dark:border-blue-500/50 shadow-sm'
+                              : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <h4
+                              className={`text-xs font-bold truncate ${
+                                isActive ? 'text-blue-700 dark:text-blue-300' : 'text-slate-800 dark:text-slate-200'
+                              }`}
+                              title={sess.title}
+                            >
+                              {sess.title}
+                            </h4>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono mt-0.5">
+                              <span>{dateStr}</span>
+                              <span>•</span>
+                              <span>{msgCount} msgs</span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteChatSession(sess.id, e)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors opacity-70 group-hover:opacity-100"
+                            title="Eliminar esta conversación"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* CONTENIDO TAB 2: TAREAS AUTÓNOMAS DE EJEMPLO */}
+              {sidebarTab === 'TAREAS' && (
+                <div className="space-y-2 text-left max-h-[500px] overflow-y-auto pr-1">
+                  <button
+                    onClick={() => handleSendPrompt('Crear cliente Distribuciones del Caribe SAS con NIT 901.888.777-1 en ARL Sura riesgo 3 con 18 trabajadores e IBC de 42 millones en Barranquilla')}
+                    className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
+                  >
+                    <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold text-[11px] mb-0.5">
+                      <Building2 size={13} /> Crear Empresa Afiliada
+                    </div>
+                    <p className="text-[10px] text-slate-500 line-clamp-2">
+                      "Crear cliente Distribuciones del Caribe SAS con NIT 901.888.777-1 en ARL Sura..."
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => handleSendPrompt('Programar visita técnica de auditoría de estándares mínimos 0312 para Transportes Andinos el 22 de septiembre a las 9:00 AM')}
+                    className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-amber-500/50 hover:bg-amber-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
+                  >
+                    <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold text-[11px] mb-0.5">
+                      <HardHat size={13} /> Programar Auditoría SST
+                    </div>
+                    <p className="text-[10px] text-slate-500 line-clamp-2">
+                      "Programar visita técnica de auditoría de estándares mínimos 0312 para Transportes Andinos..."
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => handleSendPrompt('Registrar accidente de trabajo con FURAT para el trabajador Carlos Gómez en Constructora Bolívar por contusión en rodilla izquierda con 4 días de incapacidad')}
+                    className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
+                  >
+                    <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold text-[11px] mb-0.5">
+                      <Stethoscope size={13} /> Radicar Accidente FURAT
+                    </div>
+                    <p className="text-[10px] text-slate-500 line-clamp-2">
+                      "Registrar accidente de trabajo con FURAT para Carlos Gómez en Constructora Bolívar..."
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => handleSendPrompt('Liquidar planilla PILA para Logística del Norte periodo actual con nómina de 55 millones')}
+                    className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-indigo-500/50 hover:bg-indigo-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
+                  >
+                    <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-bold text-[11px] mb-0.5">
+                      <Calculator size={13} /> Liquidar Planilla PILA
+                    </div>
+                    <p className="text-[10px] text-slate-500 line-clamp-2">
+                      "Liquidar planilla PILA para Logística del Norte periodo actual con nómina de 55 millones..."
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => handleSendPrompt('¿Cuál es el resumen de clientes, distribución por ARL y visitas programadas en la plataforma?')}
+                    className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-purple-500/50 hover:bg-purple-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
+                  >
+                    <div className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 font-bold text-[11px] mb-0.5">
+                      <Layers size={13} /> Resumen Ejecutivo Plataforma
+                    </div>
+                    <p className="text-[10px] text-slate-500 line-clamp-2">
+                      "¿Cuál es el resumen de clientes, distribución por ARL y visitas programadas...?"
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => handleSendPrompt('¿Por qué las comisiones de ARL no tienen IVA según la Sentencia C-049 de 2022 y el Estatuto Tributario?')}
+                    className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
+                  >
+                    <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold text-[11px] mb-0.5">
+                      <Shield size={13} /> Exclusión Legal de IVA (C-049/2022)
+                    </div>
+                    <p className="text-[10px] text-slate-500 line-clamp-2">
+                      "¿Por qué las comisiones de ARL no tienen IVA según la Sentencia C-049 de 2022...?"
+                    </p>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

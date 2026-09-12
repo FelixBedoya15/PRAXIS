@@ -16,6 +16,7 @@ export const STORAGE_KEYS = {
   ACTIVE_USER_ID: 'wappy_active_user_id_v1',
   LEADS: 'wappy_leads_v2',
   GEMINI_KEYS: 'praxis_gemini_keys_v1',
+  CHAT_SESSIONS: 'praxis_ai_chat_sessions_v2',
 };
 
 // Limpia llaves de datos obsoletas de versiones previas
@@ -436,4 +437,32 @@ export const saveStoredGeminiKeys = (keysString: string) => {
     pushToServer(STORAGE_KEYS.GEMINI_KEYS, keysString);
   }
 };
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: any[];
+}
+
+export const getStoredChatSessions = (): ChatSession[] => {
+  if (typeof window === 'undefined') return [];
+  const stored = localStorage.getItem(STORAGE_KEYS.CHAT_SESSIONS);
+  if (!stored) return [];
+  try {
+    const list = JSON.parse(stored);
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+};
+
+export const saveStoredChatSessions = (sessions: ChatSession[]) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEYS.CHAT_SESSIONS, JSON.stringify(sessions));
+    pushToServer(STORAGE_KEYS.CHAT_SESSIONS, sessions);
+  }
+};
+
 
