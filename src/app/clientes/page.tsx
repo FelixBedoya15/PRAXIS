@@ -1538,7 +1538,7 @@ A partir de este momento cuentan con el respaldo integral de *PRAXIS Prevención
             return (
               <div
                 key={client.id}
-                className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between space-y-4 group shadow-sm min-w-0"
+                className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between space-y-4 group/card shadow-sm min-w-0"
               >
                 <div>
                   {/* Card Header & Fast Actions */}
@@ -1547,7 +1547,7 @@ A partir de este momento cuentan con el respaldo integral de *PRAXIS Prevención
                       <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 block">
                         NIT: {client.nit}
                       </span>
-                      <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors leading-snug break-words">
+                      <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white group-hover/card:text-blue-600 dark:group-hover/card:text-blue-300 transition-colors leading-snug break-words">
                         {client.name}
                       </h3>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1">
@@ -1747,48 +1747,48 @@ A partir de este momento cuentan con el respaldo integral de *PRAXIS Prevención
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
                     <Link
                       href={`/comisiones?cliente=${encodeURIComponent(client.id)}`}
-                      className="p-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-blue-600 hover:text-white border border-slate-200 dark:border-slate-800 text-center text-[10px] font-bold text-slate-700 dark:text-slate-300 transition-all flex flex-col items-center justify-center gap-0.5 shadow-sm min-w-0"
+                      className="group/btn p-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-blue-600 hover:text-white border border-slate-200 dark:border-slate-800 text-center text-[10px] font-bold text-slate-700 dark:text-slate-300 transition-all flex flex-col items-center justify-center gap-0.5 shadow-sm min-w-0"
                       title="Liquidar comisión PILA para esta empresa"
                     >
-                      <Calculator size={13} className="text-blue-500 group-hover:text-white shrink-0" />
+                      <Calculator size={13} className="text-blue-500 group-hover/btn:text-white shrink-0 transition-colors" />
                       <span className="truncate w-full block">Comisión</span>
                     </Link>
 
                     <button
                       type="button"
                       onClick={() => openDirect0312Modal(client)}
-                      className="p-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-500 hover:text-white border border-amber-200 dark:border-amber-800 text-center text-[10px] font-bold text-amber-800 dark:text-amber-300 transition-all flex flex-col items-center justify-center gap-0.5 shadow-sm min-w-0 group"
+                      className="group/btn p-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-500 hover:text-white border border-amber-200 dark:border-amber-800 text-center text-[10px] font-bold text-amber-800 dark:text-amber-300 transition-all flex flex-col items-center justify-center gap-0.5 shadow-sm min-w-0"
                       title="Evaluar o calificar Estándares Mínimos Res. 0312 de la empresa"
                     >
-                      <Award size={13} className="text-amber-600 group-hover:text-white shrink-0" />
+                      <Award size={13} className="text-amber-600 group-hover/btn:text-white shrink-0 transition-colors" />
                       <span className="truncate w-full block">0312 Directo</span>
                     </button>
 
                     <Link
                       href={`/campo-sst?cliente=${encodeURIComponent(client.id)}`}
-                      className="p-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-emerald-600 hover:text-white border border-slate-200 dark:border-slate-800 text-center text-[10px] font-bold text-slate-700 dark:text-slate-300 transition-all flex flex-col items-center justify-center gap-0.5 shadow-sm min-w-0"
+                      className="group/btn p-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-emerald-600 hover:text-white border border-slate-200 dark:border-slate-800 text-center text-[10px] font-bold text-slate-700 dark:text-slate-300 transition-all flex flex-col items-center justify-center gap-0.5 shadow-sm min-w-0"
                       title="Programar o consultar visitas técnicas en campo"
                     >
-                      <HardHat size={13} className="text-emerald-500 group-hover:text-white shrink-0" />
+                      <HardHat size={13} className="text-emerald-500 group-hover/btn:text-white shrink-0 transition-colors" />
                       <span className="truncate w-full block">Visita SST</span>
                     </Link>
 
                     <Link
                       href={`/medico?cliente=${encodeURIComponent(client.id)}`}
-                      className="p-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-rose-600 hover:text-white border border-slate-200 dark:border-slate-800 text-center text-[10px] font-bold text-slate-700 dark:text-slate-300 transition-all flex flex-col items-center justify-center gap-0.5 shadow-sm min-w-0"
+                      className="group/btn p-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-rose-600 hover:text-white border border-slate-200 dark:border-slate-800 text-center text-[10px] font-bold text-slate-700 dark:text-slate-300 transition-all flex flex-col items-center justify-center gap-0.5 shadow-sm min-w-0"
                       title="Registrar ausentismo, FURAT o PVE"
                     >
-                      <Stethoscope size={13} className="text-rose-500 group-hover:text-white shrink-0" />
+                      <Stethoscope size={13} className="text-rose-500 group-hover/btn:text-white shrink-0 transition-colors" />
                       <span className="truncate w-full block">Médico</span>
                     </Link>
 
                     <button
                       type="button"
                       onClick={() => openWhatsAppModalForClient(client)}
-                      className="p-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-emerald-600 hover:text-white border border-slate-200 dark:border-slate-800 text-center text-[10px] font-bold text-slate-700 dark:text-slate-300 transition-all flex flex-col items-center justify-center gap-0.5 shadow-sm min-w-0"
+                      className="group/btn p-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-emerald-600 hover:text-white border border-slate-200 dark:border-slate-800 text-center text-[10px] font-bold text-slate-700 dark:text-slate-300 transition-all flex flex-col items-center justify-center gap-0.5 shadow-sm min-w-0"
                       title="Enviar WhatsApp de seguimiento o servicio"
                     >
-                      <MessageSquare size={13} className="text-emerald-500 group-hover:text-white shrink-0" />
+                      <MessageSquare size={13} className="text-emerald-500 group-hover/btn:text-white shrink-0 transition-colors" />
                       <span className="truncate w-full block">WhatsApp</span>
                     </button>
                   </div>
