@@ -37,8 +37,9 @@ Tu misión no es solo responder preguntas normativas, sino EJECUTAR TAREAS DIREC
 3. 'crear_visita_sst': Para agendar o reportar visitas técnicas de campo y auditorías Res. 0312.
 4. 'registrar_caso_medico': Para registrar accidentes de trabajo (FURAT), enfermedades laborales (FUREL) o ausentismo común por EPS.
 5. 'liquidar_planilla_pila': Para conciliar pagos PILA y calcular bolsa de retorno SST y retención 10%.
-6. 'consultar_plataforma': Para extraer consolidados o estadísticas generales.
+6. 'consultar_plataforma': Para extraer consolidados o estadísticas generales de clientes y cartera.
 7. 'enviar_whatsapp': Para redactar, preparar y enviar mensajes comerciales, técnicos o de cobranza por WhatsApp a empresas clientes o prospectos, generando el enlace directo (wa.me) con el número telefónico del representante legal o contacto SST, tal como lo hacen las tarjetas del CRM.
+8. 'consultar_estado_financiero': Para calcular y generar el Estado Financiero oficial de PRAXIS (Ingresos netos de la agencia, comisiones brutas, retención en la fuente 10% ARL, bolsa de retorno SST y desglose por empresa o período). Usar SIEMPRE que el usuario pregunte por ingresos netos, cuánto gané, comisiones del año/mes, balances, utilidades o estados financieros.
 
 DOCUMENTOS Y ARCHIVOS ADJUNTOS:
 El usuario puede adjuntar imágenes, archivos PDF (planillas, radicados FURAT, RUTs), hojas de Excel (censos de empleados, nóminas) o documentos de Word. Analiza exhaustivamente los datos contenidos en estos archivos para extraer NITs, nombres de trabajadores, diagnósticos, días de incapacidad o montos de nómina para ejecutar las herramientas de la plataforma.
@@ -51,7 +52,7 @@ CONSOLIDADO FINANCIERO Y BOLSA DE RETORNO A EMPRESAS CLIENTES:
   - Manufacturas & Calzado Industrial Colombia S.A.S. (cli-002): 25% retorno -> $79.412 COP acumulado (2 planillas)
   - Metalmecánica & Montajes Petroleros S.A.S. (cli-003): 30% retorno -> $374.339 COP acumulado (2 planillas)
   - Suma exacta: $150.387 + $79.412 + $374.339 = $604.138 COP.
-• Margen Neto Agencia: $1.346.148 COP
+• Margen Neto Agencia (Ingreso Neto Real de PRAXIS): $1.346.148 COP
 • Concepto de Bolsa de Retorno SST: Es el porcentaje acordado (25% o 30%) de la comisión neta que la agencia reinvierte en las empresas para financiar sus visitas técnicas de campo, auditorías Res. 0312 y asesoría médico-laboral, por lo cual las visitas no tienen cobro adicional para la empresa.
 
 EMPRESAS ACTIVAS REGISTRADAS EN EL SISTEMA:
@@ -59,6 +60,7 @@ ${clientsList || 'No hay empresas registradas aún.'}
 
 REGLAS DE OPERACIÓN:
 - Cuando el usuario te pida explícitamente o implícitamente crear, registrar, programar, liquidar algo o ENVIAR UN MENSAJE POR WHATSAPP (o te adjunte un archivo para procesarlo), INVOCA INMEDIATAMENTE la herramienta correspondiente con parámetros coherentes con la normatividad colombiana.
+- IMPORTANTE PARA INGRESOS NETOS Y ESTADOS FINANCIEROS: Si el usuario te pregunta "cuantos son mis ingresos netos", "cuánto he ganado este año", "cuál es mi ganancia", "dame el estado financiero", "balance general o por empresa", INVOCA SIEMPRE 'consultar_estado_financiero'. Tus ingresos netos reales de 2026 son $1.346.148 COP (Comisión Bruta: $2.166.986 - Retefuente 10%: $216.700 - Retorno Clientes SST: $604.138 = $1.346.148 COP). Nunca respondas de forma genérica o evasiva sobre finanzas.
 - IMPORTANTE PARA WHATSAPP: Si el usuario te pide "puedes enviar un mensaje por whatsapp a...", "mándale un whatsapp a la empresa...", "escríbele por whatsapp sobre...", INVOCA SIEMPRE la herramienta 'enviar_whatsapp'. Redacta un mensaje comercial persuasivo o técnico impecable en 'messageText' y define 'companyNameOrId'. NO te limites a redactar una sugerencia de texto: ejecuta la herramienta para que el usuario obtenga el botón de envío directo wa.me.
 - Si el usuario pregunta por el retorno de $604.138 o las cifras de comisiones, explícale con total claridad y exactitud el desglose por empresa indicado arriba ($150.387 Palmareal, $79.412 Calzado, $374.339 Metalmecánica).
 - Sé conciso, ejecutivo, seguro y profesional.
@@ -179,6 +181,69 @@ REGLAS DE OPERACIÓN:
 function processFallbackIntent(prompt: string, currentContext: any): ToolExecutionResult | null {
   const lower = prompt.toLowerCase();
 
+  // 0. CONSULTAS FINANCIERAS (Ingresos netos, estado financiero, balance, ganancias, comisiones)
+  if (
+    lower.includes('ingreso') ||
+    lower.includes('neto') ||
+    lower.includes('ganancia') ||
+    lower.includes('utilidad') ||
+    lower.includes('financier') ||
+    lower.includes('balance') ||
+    lower.includes('comision') ||
+    lower.includes('cuanto gane') ||
+    lower.includes('cuanto nos queda') ||
+    lower.includes('cuanto es mi') ||
+    lower.includes('cuantos son mis') ||
+    lower.includes('cuanto dinero') ||
+    lower.includes('pyg')
+  ) {
+    let detectedCompany = '';
+    const clients = currentContext.clients || [];
+    for (const c of clients) {
+      if (lower.includes(c.name.toLowerCase()) || lower.includes(c.id.toLowerCase())) {
+        detectedCompany = c.name;
+        break;
+      }
+    }
+    if (!detectedCompany) {
+      if (lower.includes('palma') || lower.includes('palmareal')) detectedCompany = 'Palmareal';
+      else if (lower.includes('calzado') || lower.includes('manufactura')) detectedCompany = 'Calzado';
+      else if (lower.includes('metal') || lower.includes('petroler') || lower.includes('montajes')) detectedCompany = 'Metalmecánica';
+    }
+
+    let year = '2026';
+    let month = '';
+    if (lower.includes('historico') || lower.includes('todos los años') || lower.includes('todo el tiempo')) {
+      year = 'TODOS';
+    } else if (lower.includes('2025')) {
+      year = '2025';
+    } else if (lower.includes('2024')) {
+      year = '2024';
+    }
+
+    if (lower.includes('agosto') || lower.includes('este mes')) {
+      month = `${year === 'TODOS' ? '2026' : year}-08`;
+    } else if (lower.includes('julio')) {
+      month = `${year === 'TODOS' ? '2026' : year}-07`;
+    } else if (lower.includes('junio')) {
+      month = `${year === 'TODOS' ? '2026' : year}-06`;
+    }
+
+    return executeToolCall('consultar_estado_financiero', {
+      scope: detectedCompany ? 'EMPRESA' : month ? 'PERIODO' : 'GENERAL',
+      companyNameOrId: detectedCompany,
+      periodYear: year,
+      periodMonth: month,
+    }, {
+      clients: currentContext.clients || [],
+      leads: currentContext.leads || [],
+      visits: currentContext.visits || [],
+      medicalRecords: currentContext.medicalRecords || [],
+      pilaRecords: currentContext.pilaRecords || [],
+      occupationalExams: currentContext.occupationalExams || [],
+    });
+  }
+
   if (lower.includes('crear empresa') || lower.includes('crear cliente') || lower.includes('nueva empresa')) {
     // Intentar extraer nombre básico
     const nameMatch = prompt.match(/(?:empresa|cliente)\s+(?:llamada\s+|denominada\s+)?["']?([^"',\n]+)["']?/i);
@@ -252,7 +317,7 @@ function processFallbackIntent(prompt: string, currentContext: any): ToolExecuti
     });
   }
 
-  if (lower.includes('resumen') || lower.includes('cartera') || lower.includes('estado')) {
+  if (lower.includes('resumen general') || lower.includes('estado de la plataforma') || lower.includes('metricas')) {
     return executeToolCall('consultar_plataforma', { queryType: 'RESUMEN_CARTERA' }, {
       clients: currentContext.clients || [],
       leads: currentContext.leads || [],

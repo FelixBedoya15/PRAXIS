@@ -1231,6 +1231,107 @@ export default function WappyIAPage() {
                             </div>
                           )}
 
+                          {/* Tarjeta Ejecutiva de Estado Financiero Oficial */}
+                          {msg.actionExecuted.entityType === 'ESTADO_FINANCIERO' && msg.actionExecuted.data && (
+                            <div className="space-y-3 bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 p-3.5 rounded-xl border border-blue-500/40 text-white shadow-md">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                                  <span className="font-bold text-xs text-blue-200 uppercase tracking-wide">
+                                    Estado Financiero Oficial ({msg.actionExecuted.data.scope === 'EMPRESA' ? 'Por Empresa' : msg.actionExecuted.data.scope === 'PERIODO' ? 'Por Período' : 'Consolidado General'})
+                                  </span>
+                                </div>
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                  {msg.actionExecuted.data.title || 'PRAXIS 2026'}
+                                </span>
+                              </div>
+
+                              {/* Resumen Destacado de Ingreso Neto */}
+                              <div className="p-3 rounded-lg bg-white/10 backdrop-blur-sm border border-white/10 flex items-center justify-between">
+                                <div>
+                                  <span className="text-[10px] text-blue-200 uppercase font-bold tracking-wider block">Margen Neto Real de PRAXIS</span>
+                                  <span className="text-xl sm:text-2xl font-black text-emerald-400 font-mono">
+                                    ${Math.round(msg.actionExecuted.data.totalAgencyNetMargin || 0).toLocaleString('es-CO')} COP
+                                  </span>
+                                </div>
+                                <div className="text-right text-[10px] text-slate-300">
+                                  <div>Planillas: <strong className="text-white">{msg.actionExecuted.data.planillasCount || 0}</strong></div>
+                                  <div className="text-emerald-300 font-semibold">Exento IVA Art. 476</div>
+                                </div>
+                              </div>
+
+                              {/* Métricas Principales */}
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
+                                <div className="p-2 rounded bg-black/30 border border-white/5">
+                                  <span className="text-slate-400 block">Comisión Bruta:</span>
+                                  <strong className="text-white font-mono block text-[11px]">${Math.round(msg.actionExecuted.data.totalGrossCommission || 0).toLocaleString('es-CO')}</strong>
+                                </div>
+                                <div className="p-2 rounded bg-black/30 border border-white/5">
+                                  <span className="text-rose-400 block">(-) Retefuente 10%:</span>
+                                  <strong className="text-rose-300 font-mono block text-[11px]">-${Math.round(msg.actionExecuted.data.totalRetefuente || 0).toLocaleString('es-CO')}</strong>
+                                </div>
+                                <div className="p-2 rounded bg-black/30 border border-white/5">
+                                  <span className="text-blue-300 block">(=) Neto Bancos (90%):</span>
+                                  <strong className="text-blue-200 font-mono block text-[11px]">${Math.round(msg.actionExecuted.data.totalNetReceived || 0).toLocaleString('es-CO')}</strong>
+                                </div>
+                                <div className="p-2 rounded bg-black/30 border border-white/5">
+                                  <span className="text-amber-400 block">(-) Bolsa Retorno SST:</span>
+                                  <strong className="text-amber-300 font-mono block text-[11px]">-${Math.round(msg.actionExecuted.data.totalClientReturn || 0).toLocaleString('es-CO')}</strong>
+                                </div>
+                              </div>
+
+                              {/* Tabla Desglose por Empresa si hay varias */}
+                              {Array.isArray(msg.actionExecuted.data.companiesBreakdown) && msg.actionExecuted.data.companiesBreakdown.length > 1 && (
+                                <div className="mt-2 overflow-x-auto rounded-lg border border-white/10">
+                                  <table className="w-full text-left text-[10px]">
+                                    <thead className="bg-black/40 text-slate-300">
+                                      <tr>
+                                        <th className="p-1.5 font-bold">Empresa</th>
+                                        <th className="p-1.5 font-bold">ARL</th>
+                                        <th className="p-1.5 font-bold text-right">Comisión Bruta</th>
+                                        <th className="p-1.5 font-bold text-right">Retorno SST</th>
+                                        <th className="p-1.5 font-bold text-right">Margen Neto</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5 bg-black/20">
+                                      {msg.actionExecuted.data.companiesBreakdown.map((comp: any) => (
+                                        <tr key={comp.companyId} className="hover:bg-white/5">
+                                          <td className="p-1.5 font-medium truncate max-w-[120px]">{comp.companyName}</td>
+                                          <td className="p-1.5 uppercase text-blue-300 font-mono">{comp.arl}</td>
+                                          <td className="p-1.5 text-right font-mono">${Math.round(comp.grossCommission).toLocaleString('es-CO')}</td>
+                                          <td className="p-1.5 text-right font-mono text-amber-300">${Math.round(comp.clientReturn).toLocaleString('es-CO')}</td>
+                                          <td className="p-1.5 text-right font-mono font-bold text-emerald-400">${Math.round(comp.agencyMargin).toLocaleString('es-CO')}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+
+                              {/* Acciones Rápidas */}
+                              <div className="pt-1 flex items-center justify-between text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const text = `ESTADO FINANCIERO PRAXIS (${msg.actionExecuted?.data?.title || '2026'})\n• Ingresos Netos PRAXIS: $${Math.round(msg.actionExecuted?.data?.totalAgencyNetMargin || 0).toLocaleString('es-CO')} COP\n• Comisión Bruta ARL: $${Math.round(msg.actionExecuted?.data?.totalGrossCommission || 0).toLocaleString('es-CO')} COP\n• Retención 10%: -$${Math.round(msg.actionExecuted?.data?.totalRetefuente || 0).toLocaleString('es-CO')} COP\n• Retorno Clientes SST: -$${Math.round(msg.actionExecuted?.data?.totalClientReturn || 0).toLocaleString('es-CO')} COP`;
+                                    navigator.clipboard.writeText(text);
+                                    alert('📋 Resumen del Estado Financiero copiado al portapapeles');
+                                  }}
+                                  className="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-slate-200 text-[11px] font-semibold transition-all flex items-center gap-1"
+                                >
+                                  <Copy size={11} /> Copiar Cifras
+                                </button>
+
+                                <Link
+                                  href="/comisiones"
+                                  className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-sm"
+                                >
+                                  Abrir Estado Financiero Oficial en Comisiones <ArrowRight size={12} />
+                                </Link>
+                              </div>
+                            </div>
+                          )}
+
                           {msg.actionExecuted.redirectUrl && (
                             <div className="pt-1 flex justify-end">
                               <Link

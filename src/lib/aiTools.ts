@@ -219,6 +219,40 @@ export const PRAXIS_GEMINI_TOOLS = [
           required: ['companyNameOrId', 'employeeName', 'employeeRole', 'examType', 'aptitudeStatus'],
         },
       },
+      {
+        name: 'consultar_estado_financiero',
+        description:
+          'Calcula y consulta el Estado Financiero oficial de PRAXIS (Ingresos netos de la agencia, comisiones brutas, retención en la fuente 10% ARL, bolsa de retorno SST y desglose por empresa o período). Usar SIEMPRE que el usuario pregunte por ingresos netos, comisiones ganadas, balances, utilidades o estados financieros.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            scope: {
+              type: 'STRING',
+              description: 'Alcance: GENERAL (todas las empresas), EMPRESA (empresa específica) o PERIODO (año, mes, trimestre o semestre)',
+            },
+            companyNameOrId: {
+              type: 'STRING',
+              description: 'Nombre o ID de la empresa cliente para filtrar (ej: Metalmecánica, Palmareal, Calzado, cli-001)',
+            },
+            periodYear: {
+              type: 'STRING',
+              description: 'Año a consultar (ej: 2026 o TODOS)',
+            },
+            periodMonth: {
+              type: 'STRING',
+              description: 'Mes específico en formato AAAA-MM (ej: 2026-08)',
+            },
+            periodQuarter: {
+              type: 'STRING',
+              description: 'Trimestre: Q1 (T1), Q2 (T2), Q3 (T3) o Q4 (T4)',
+            },
+            periodSemester: {
+              type: 'STRING',
+              description: 'Semestre: S1 o S2',
+            },
+          },
+        },
+      },
     ],
   },
 ];
@@ -227,7 +261,7 @@ export interface ToolExecutionResult {
   success: boolean;
   action: string;
   message: string;
-  entityType?: 'CLIENT' | 'LEAD' | 'VISIT' | 'MEDICAL' | 'OCCUPATIONAL_EXAM' | 'PILA' | 'WHATSAPP';
+  entityType?: 'CLIENT' | 'LEAD' | 'VISIT' | 'MEDICAL' | 'OCCUPATIONAL_EXAM' | 'PILA' | 'WHATSAPP' | 'ESTADO_FINANCIERO';
   data?: any;
   redirectUrl?: string;
 }
@@ -241,6 +275,7 @@ export function executeToolCall(name: string, args: any, currentData: {
   visits: FieldVisit[];
   medicalRecords: MedicalRecord[];
   pilaRecords: PilaRecord[];
+  occupationalExams?: OccupationalExam[];
 }): ToolExecutionResult {
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
@@ -473,16 +508,21 @@ export function executeToolCall(name: string, args: any, currentData: {
     }
 
     case 'consultar_plataforma': {
+      if (args.queryType === 'ESTADO_FINANCIERO' || args.queryType === 'COMISIONES') {
+        return executeToolCall('consultar_estado_financiero', { scope: 'GENERAL', periodYear: '2026' }, currentData);
+      }
+
       const clientsCount = currentData.clients.length;
       const leadsCount = currentData.leads.length;
       const visitsCount = currentData.visits.length;
       const medicalCount = currentData.medicalRecords.length;
       const totalIbc = currentData.clients.reduce((s, c) => s + c.monthlyIbc, 0);
+      const totalMargenNeto = currentData.pilaRecords.reduce((s, p) => s + (p.agencyNetMargin || 0), 0);
 
       return {
         success: true,
         action: 'consultar_plataforma',
-        message: `Estado de la plataforma: ${clientsCount} empresas clientes activas (IBC total: $${totalIbc.toLocaleString('es-CO')}), ${leadsCount} prospectos comerciales en pipeline, ${visitsCount} visitas técnicas de campo SST y ${medicalCount} casos médicos/incapacidades registrados.`,
+        message: `Estado de la plataforma: ${clientsCount} empresas clientes activas (IBC total: $${totalIbc.toLocaleString('es-CO')}), Margen Neto PRAXIS acumulado: $${totalMargenNeto.toLocaleString('es-CO')} COP, ${leadsCount} prospectos comerciales en pipeline, ${visitsCount} visitas técnicas de campo SST y ${medicalCount} casos médicos registrados.`,
       };
     }
 
@@ -592,6 +632,215 @@ export function executeToolCall(name: string, args: any, currentData: {
         entityType: 'OCCUPATIONAL_EXAM',
         data: newExam,
         redirectUrl: `/examenes-ocupacionales?cliente=${targetClientId}`,
+      };
+    }
+
+    case 'consultar_estado_financiero': {
+      const scopeArg = (args.scope || '').toUpperCase();
+      const companyArg = (args.companyNameOrId || '').toLowerCase().trim();
+      const yearArg = args.periodYear ? String(args.periodYear) : (args.periodMonth ? args.periodMonth.slice(0, 4) : '2026');
+      const monthArg = args.periodMonth || '';
+      const quarterArg = args.periodQuarter ? String(args.periodQuarter).toUpperCase() : '';
+      const semesterArg = args.periodSemester ? String(args.periodSemester).toUpperCase() : '';
+
+      // 1. Identificar cliente específico si se proporcionó
+      const targetClient = companyArg
+        ? currentData.clients.find(
+            (c) =>
+              c.id.toLowerCase() === companyArg ||
+              c.name.toLowerCase().includes(companyArg) ||
+              c.nit.toLowerCase().includes(companyArg)
+          )
+        : null;
+
+      const isCompanyScope = !!targetClient || scopeArg === 'EMPRESA';
+      const isPeriodScope = !!monthArg || !!quarterArg || !!semesterArg || (yearArg !== 'TODOS' && scopeArg === 'PERIODO');
+
+      // 2. Filtrar planillas PILA
+      let filteredPilas = [...currentData.pilaRecords];
+
+      if (targetClient) {
+        filteredPilas = filteredPilas.filter((p) => p.clientId === targetClient.id);
+      }
+
+      if (monthArg) {
+        filteredPilas = filteredPilas.filter((p) => p.month === monthArg);
+      } else if (quarterArg) {
+        filteredPilas = filteredPilas.filter((p) => {
+          const recYear = p.month ? p.month.slice(0, 4) : '2026';
+          const recMonth = p.month ? parseInt(p.month.slice(5, 7), 10) : 1;
+          const q = recMonth <= 3 ? 'Q1' : recMonth <= 6 ? 'Q2' : recMonth <= 9 ? 'Q3' : 'Q4';
+          return (yearArg === 'TODOS' || recYear === yearArg) && q === quarterArg;
+        });
+      } else if (semesterArg) {
+        filteredPilas = filteredPilas.filter((p) => {
+          const recYear = p.month ? p.month.slice(0, 4) : '2026';
+          const recMonth = p.month ? parseInt(p.month.slice(5, 7), 10) : 1;
+          const s = recMonth <= 6 ? 'S1' : 'S2';
+          return (yearArg === 'TODOS' || recYear === yearArg) && s === semesterArg;
+        });
+      } else if (yearArg && yearArg !== 'TODOS') {
+        filteredPilas = filteredPilas.filter((p) => (p.month ? p.month.startsWith(yearArg) : p.year === parseInt(yearArg, 10)));
+      }
+
+      // Si por alguna razón el filtro no arrojó planillas pero hay datos globales, tomamos el año
+      if (filteredPilas.length === 0 && currentData.pilaRecords.length > 0 && !targetClient && !monthArg) {
+        filteredPilas = [...currentData.pilaRecords];
+      }
+
+      // 3. Totales calculados
+      const totalIbc = filteredPilas.reduce((sum, p) => sum + (p.ibcReported || 0), 0);
+      const totalArlContribution = filteredPilas.reduce((sum, p) => sum + (p.arlContribution || 0), 0);
+      const totalGrossCommission = filteredPilas.reduce(
+        (sum, p) => sum + (p.realPaidCommission ?? p.expectedCommission ?? 0),
+        0
+      );
+      const totalRetefuente = filteredPilas.reduce(
+        (sum, p) => sum + (p.retefuenteAmount ?? ((p.realPaidCommission || p.expectedCommission || 0) * 0.10)),
+        0
+      );
+      const totalNetReceived = filteredPilas.reduce(
+        (sum, p) => sum + (p.netCommissionReceived ?? ((p.realPaidCommission || p.expectedCommission || 0) * 0.90)),
+        0
+      );
+      const totalClientReturn = filteredPilas.reduce(
+        (sum, p) =>
+          sum +
+          (p.clientReturnAmount ??
+            ((p.realPaidCommission || p.expectedCommission || 0) * ((p.clientReturnPercentage ?? 25) / 100))),
+        0
+      );
+      const totalAgencyNetMargin = filteredPilas.reduce(
+        (sum, p) =>
+          sum +
+          (p.agencyNetMargin ??
+            ((p.netCommissionReceived ?? ((p.realPaidCommission || 0) * 0.90)) - (p.clientReturnAmount ?? 0))),
+        0
+      );
+
+      // Desglose por empresa
+      const companyMap = new Map<string, {
+        client: ClientCompany | undefined;
+        planillasCount: number;
+        totalIbc: number;
+        grossCommission: number;
+        retefuente: number;
+        netReceived: number;
+        clientReturn: number;
+        agencyMargin: number;
+      }>();
+
+      for (const p of filteredPilas) {
+        const client = currentData.clients.find((c) => c.id === p.clientId);
+        const prev = companyMap.get(p.clientId) || {
+          client,
+          planillasCount: 0,
+          totalIbc: 0,
+          grossCommission: 0,
+          retefuente: 0,
+          netReceived: 0,
+          clientReturn: 0,
+          agencyMargin: 0,
+        };
+        const gross = p.realPaidCommission ?? p.expectedCommission ?? 0;
+        const rete = p.retefuenteAmount ?? (gross * 0.10);
+        const net = p.netCommissionReceived ?? (gross * 0.90);
+        const retCl = p.clientReturnAmount ?? (gross * ((p.clientReturnPercentage ?? 25) / 100));
+        const margin = p.agencyNetMargin ?? (net - retCl);
+
+        prev.planillasCount += 1;
+        prev.totalIbc += p.ibcReported || 0;
+        prev.grossCommission += gross;
+        prev.retefuente += rete;
+        prev.netReceived += net;
+        prev.clientReturn += retCl;
+        prev.agencyMargin += margin;
+        companyMap.set(p.clientId, prev);
+      }
+
+      const companiesBreakdown = Array.from(companyMap.entries()).map(([cid, val]) => ({
+        companyId: cid,
+        companyName: val.client?.name || cid,
+        nit: val.client?.nit || 'N/A',
+        arl: (val.client?.primaryArlId || 'sura').toUpperCase(),
+        planillasCount: val.planillasCount,
+        totalIbc: val.totalIbc,
+        grossCommission: val.grossCommission,
+        retefuente: val.retefuente,
+        netReceived: val.netReceived,
+        clientReturn: val.clientReturn,
+        agencyMargin: val.agencyMargin,
+      }));
+
+      // Título y alcance del reporte
+      let periodLabel = yearArg === 'TODOS' ? 'Histórico Consolidado' : `Año ${yearArg}`;
+      if (monthArg) {
+        periodLabel = `Mes ${monthArg}`;
+      } else if (quarterArg) {
+        periodLabel = `Trimestre ${quarterArg} • ${yearArg}`;
+      } else if (semesterArg) {
+        periodLabel = `Semestre ${semesterArg} • ${yearArg}`;
+      }
+
+      const scopeTitle = targetClient
+        ? `Empresa: ${targetClient.name}`
+        : isPeriodScope
+        ? `Período: ${periodLabel}`
+        : `Consolidado General • ${periodLabel}`;
+
+      const formatCOP = (n: number) => `$${Math.round(n).toLocaleString('es-CO')} COP`;
+
+      // Construcción del informe formal en Markdown con respuesta directa a los ingresos netos
+      let markdownReport = `### 📊 Estado Financiero Oficial - PRAXIS Prevención y Seguros\n\n`;
+      markdownReport += `**Alcance:** ${scopeTitle}\n`;
+      markdownReport += `**Planillas PILA Conciliadas:** ${filteredPilas.length}\n\n`;
+      markdownReport += `> 💰 **Tus Ingresos Netos Reales (Margen PRAXIS): ${formatCOP(totalAgencyNetMargin)}**\n\n`;
+      markdownReport += `#### 📋 Resumen del Estado de Resultados (PyG Intermediación ARL):\n`;
+      markdownReport += `| Concepto Financiero | Monto Liquidado (COP) | Fundamento Normativo |\n`;
+      markdownReport += `| :--- | :--- | :--- |\n`;
+      markdownReport += `| **Masa Salarial Gestionada (IBC)** | **${formatCOP(totalIbc)}** | Nómina total reportada en PILA |\n`;
+      markdownReport += `| **Aportes ARL Liquidados** | ${formatCOP(totalArlContribution)} | Recaudados por la aseguradora ARL |\n`;
+      markdownReport += `| **Comisión Bruta de Intermediación** | **${formatCOP(totalGrossCommission)}** | *Excluida de IVA (Sentencia C-049/2022 / Art. 476 E.T.)* |\n`;
+      markdownReport += `| **(-) Retención en la Fuente 10% ARL** | **-${formatCOP(totalRetefuente)}** | Deducido por la ARL según Art. 392 E.T. |\n`;
+      markdownReport += `| **(=) Comisión Neta Percibida (90%)** | **${formatCOP(totalNetReceived)}** | Girado por la aseguradora a cuentas de PRAXIS |\n`;
+      markdownReport += `| **(-) Bolsa de Retorno SST a Clientes** | **-${formatCOP(totalClientReturn)}** | Inversión técnica acordada (25%-30%) para visitas y exámenes |\n`;
+      markdownReport += `| **(=) MARGEN NETO REAL PRAXIS** | **${formatCOP(totalAgencyNetMargin)}** | **Utilidad neta disponible de la Agencia** |\n\n`;
+
+      if (companiesBreakdown.length > 1) {
+        markdownReport += `#### 🏢 Desglose por Empresa Cliente:\n`;
+        markdownReport += `| Empresa | ARL | Planillas | Comisión Bruta | Retorno SST | Margen PRAXIS |\n`;
+        markdownReport += `| :--- | :---: | :---: | :--- | :--- | :--- |\n`;
+        companiesBreakdown.forEach((cb) => {
+          markdownReport += `| **${cb.companyName}** | ${cb.arl} | ${cb.planillasCount} | ${formatCOP(cb.grossCommission)} | ${formatCOP(cb.clientReturn)} | **${formatCOP(cb.agencyMargin)}** |\n`;
+        });
+        markdownReport += `\n`;
+      }
+
+      markdownReport += `💡 *Puedes visualizar o imprimir el certificado oficial en el módulo de [Comisiones y Conciliación PILA](/comisiones).*`;
+
+      return {
+        success: true,
+        action: 'consultar_estado_financiero',
+        message: markdownReport,
+        entityType: 'ESTADO_FINANCIERO',
+        data: {
+          scope: targetClient ? 'EMPRESA' : isPeriodScope ? 'PERIODO' : 'GENERAL',
+          title: scopeTitle,
+          periodYear: yearArg,
+          periodMonth: monthArg,
+          periodLabel,
+          targetCompany: targetClient ? targetClient.name : 'Consolidado General (Todas las empresas)',
+          totalIbc,
+          totalArlContribution,
+          totalGrossCommission,
+          totalRetefuente,
+          totalNetReceived,
+          totalClientReturn,
+          totalAgencyNetMargin,
+          planillasCount: filteredPilas.length,
+          companiesBreakdown,
+        },
+        redirectUrl: targetClient ? `/comisiones?cliente=${targetClient.id}` : '/comisiones',
       };
     }
 

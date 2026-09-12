@@ -26,9 +26,23 @@ import {
   RotateCcw,
   Filter,
   SlidersHorizontal,
+  Download,
+  DollarSign,
+  Scale,
+  Briefcase,
+  ExternalLink,
 } from 'lucide-react';
-import { getStoredPilaRecords, saveStoredPilaRecords, getStoredClients, saveStoredClients, getStoredARLs, getStoredFieldVisits, getStoredAgencyProfile } from '@/lib/storage';
-import { PilaRecord, ClientCompany, ARLCompany, RiskClass, RISK_RATES, FieldVisit, AgencyProfile } from '@/types';
+import {
+  getStoredPilaRecords,
+  saveStoredPilaRecords,
+  getStoredClients,
+  saveStoredClients,
+  getStoredARLs,
+  getStoredFieldVisits,
+  getStoredAgencyProfile,
+  getStoredOccupationalExams,
+} from '@/lib/storage';
+import { PilaRecord, ClientCompany, ARLCompany, RiskClass, RISK_RATES, FieldVisit, AgencyProfile, OccupationalExam } from '@/types';
 import { calculateCompanyFinancials } from '@/lib/calculations';
 import { printDocumentById } from '@/lib/printUtils';
 
@@ -56,6 +70,17 @@ export default function ComisionesPage() {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [selectedRecordForInvoice, setSelectedRecordForInvoice] = useState<PilaRecord | null>(null);
 
+  // Modal Estado Financiero Oficial (General, Por Empresa, Por Periodo)
+  const [showFinancialStatementModal, setShowFinancialStatementModal] = useState(false);
+  const [statementScope, setStatementScope] = useState<'GENERAL' | 'EMPRESA' | 'PERIODO'>('GENERAL');
+  const [statementCompanyId, setStatementCompanyId] = useState<string>('');
+  const [statementPeriodType, setStatementPeriodType] = useState<'ANUAL' | 'MES' | 'TRIMESTRE' | 'SEMESTRE'>('ANUAL');
+  const [statementYear, setStatementYear] = useState<string>('2026');
+  const [statementMonth, setStatementMonth] = useState<string>('2026-08');
+  const [statementQuarter, setStatementQuarter] = useState<'Q1' | 'Q2' | 'Q3' | 'Q4'>('Q3');
+  const [statementSemester, setStatementSemester] = useState<'S1' | 'S2'>('S2');
+  const [occupationalExams, setOccupationalExams] = useState<OccupationalExam[]>([]);
+
   // Form State for new Record
   const [selectedClientForNew, setSelectedClientForNew] = useState('');
   const [newMonth, setNewMonth] = useState('2026-08');
@@ -75,11 +100,13 @@ export default function ComisionesPage() {
     const clis = getStoredClients();
     const loadedArls = getStoredARLs();
     const loadedVisits = getStoredFieldVisits();
+    const loadedExams = getStoredOccupationalExams();
 
     setRecords(loadedRecords);
     setClients(clis);
     setArls(loadedArls);
     setFieldVisits(loadedVisits);
+    setOccupationalExams(loadedExams);
     setAgencyProfile(getStoredAgencyProfile());
     const handleProfileUpdated = () => {
       setAgencyProfile(getStoredAgencyProfile());
@@ -89,6 +116,7 @@ export default function ComisionesPage() {
       setClients(getStoredClients());
       setArls(getStoredARLs());
       setFieldVisits(getStoredFieldVisits());
+      setOccupationalExams(getStoredOccupationalExams());
       setAgencyProfile(getStoredAgencyProfile());
     };
     window.addEventListener('praxis_profile_updated', handleProfileUpdated);
@@ -102,6 +130,7 @@ export default function ComisionesPage() {
         const found = clis.find((c) => c.id === targetClientId);
         if (found) {
           setSelectedClientForNew(found.id);
+          setStatementCompanyId(found.id);
           const arl = loadedArls.find((a) => a.id === found.primaryArlId);
           const fin = calculateCompanyFinancials(found, arl);
           setNewIbc(fin.totalIbc);
@@ -117,6 +146,7 @@ export default function ComisionesPage() {
 
     if (clis.length > 0) {
       setSelectedClientForNew(clis[0].id);
+      setStatementCompanyId(clis[0].id);
       setNewIbc(clis[0].monthlyIbc);
       setNewRisk(clis[0].riskClass);
       setNewReturnPercentage(clis[0].returnPercentage ?? 25);
@@ -128,18 +158,22 @@ export default function ComisionesPage() {
     };
   }, []);
 
-  // Keyboard shortcut listener to cleanly intercept Cmd+P / Ctrl+P when Invoice Modal is open
+  // Keyboard shortcut listener to cleanly intercept Cmd+P / Ctrl+P
   useEffect(() => {
-    if (!showInvoiceModal || !selectedRecordForInvoice) return;
+    if ((!showInvoiceModal || !selectedRecordForInvoice) && !showFinancialStatementModal) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
         e.preventDefault();
-        printDocumentById('cuenta-cobro-sheet', `Cuenta de Cobro - ${selectedRecordForInvoice.clientName}`);
+        if (showFinancialStatementModal) {
+          printDocumentById('estado-financiero-sheet', 'Estado Financiero - PRAXIS Prevención y Seguros');
+        } else if (showInvoiceModal && selectedRecordForInvoice) {
+          printDocumentById('cuenta-cobro-sheet', `Cuenta de Cobro - ${selectedRecordForInvoice.clientName}`);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showInvoiceModal, selectedRecordForInvoice]);
+  }, [showInvoiceModal, selectedRecordForInvoice, showFinancialStatementModal]);
 
   const handleClientChangeForNew = (clientId: string) => {
     setSelectedClientForNew(clientId);
@@ -309,6 +343,196 @@ export default function ComisionesPage() {
   const activeModalArl = arls.find((a) => a.id === activeModalClient?.primaryArlId);
   const activeModalFin = activeModalClient ? calculateCompanyFinancials(activeModalClient, activeModalArl) : null;
 
+  // --- MOTOR DE CÁLCULO PARA EL ESTADO FINANCIERO OFICIAL (GENERAL, POR EMPRESA, POR PERIODO) ---
+  const filteredStatementRecords = records.filter((r) => {
+    // 1. Filtro por Empresa si el alcance es EMPRESA
+    if (statementScope === 'EMPRESA') {
+      if (statementCompanyId && r.clientId !== statementCompanyId) return false;
+    }
+
+    // 2. Filtro por Período
+    const recYear = r.month ? r.month.slice(0, 4) : '2026';
+    const recMonthNum = r.month ? parseInt(r.month.slice(5, 7), 10) : 8;
+    const recQuarter = recMonthNum <= 3 ? 'Q1' : recMonthNum <= 6 ? 'Q2' : recMonthNum <= 9 ? 'Q3' : 'Q4';
+    const recSemester = recMonthNum <= 6 ? 'S1' : 'S2';
+
+    if (statementScope === 'PERIODO') {
+      if (statementPeriodType === 'MES') {
+        return r.month === statementMonth;
+      }
+      if (statementPeriodType === 'TRIMESTRE') {
+        return (statementYear === 'TODOS' || recYear === statementYear) && recQuarter === statementQuarter;
+      }
+      if (statementPeriodType === 'SEMESTRE') {
+        return (statementYear === 'TODOS' || recYear === statementYear) && recSemester === statementSemester;
+      }
+      if (statementPeriodType === 'ANUAL') {
+        return statementYear === 'TODOS' || recYear === statementYear;
+      }
+    }
+
+    // Si el alcance es GENERAL, filtramos por año si no es TODOS
+    if (statementScope === 'GENERAL' && statementYear !== 'TODOS') {
+      return recYear === statementYear;
+    }
+
+    return true;
+  });
+
+  const filteredStatementExams = occupationalExams.filter((ex) => {
+    if (statementScope === 'EMPRESA') {
+      return ex.clientId === statementCompanyId;
+    }
+    const examYear = ex.date ? ex.date.slice(0, 4) : '2026';
+    if (statementYear !== 'TODOS') {
+      return examYear === statementYear;
+    }
+    return true;
+  });
+
+  const stIbc = filteredStatementRecords.reduce((sum, r) => sum + (r.ibcReported || 0), 0);
+  const stArlContribution = filteredStatementRecords.reduce((sum, r) => sum + (r.arlContribution || 0), 0);
+  const stGrossCommission = filteredStatementRecords.reduce(
+    (sum, r) => sum + (r.realPaidCommission ?? r.expectedCommission ?? 0),
+    0
+  );
+  const stRetefuente = filteredStatementRecords.reduce(
+    (sum, r) => sum + (r.retefuenteAmount ?? ((r.realPaidCommission || r.expectedCommission || 0) * 0.10)),
+    0
+  );
+  const stNetReceived = filteredStatementRecords.reduce(
+    (sum, r) => sum + (r.netCommissionReceived ?? ((r.realPaidCommission || r.expectedCommission || 0) * 0.90)),
+    0
+  );
+  const stClientReturn = filteredStatementRecords.reduce(
+    (sum, r) =>
+      sum +
+      (r.clientReturnAmount ??
+        ((r.realPaidCommission || r.expectedCommission || 0) * ((r.clientReturnPercentage ?? 25) / 100))),
+    0
+  );
+  const stExamsCost = filteredStatementExams.reduce(
+    (sum, ex) => sum + (ex.coveredByReinvestment ? ex.totalCost : 0),
+    0
+  );
+  const stBagBalance = Math.max(0, stClientReturn - stExamsCost);
+  const stPraxisNetMargin = filteredStatementRecords.reduce(
+    (sum, r) =>
+      sum +
+      (r.agencyNetMargin ??
+        ((r.netCommissionReceived ?? ((r.realPaidCommission || 0) * 0.90)) - (r.clientReturnAmount ?? 0))),
+    0
+  );
+
+  const statementCompaniesBreakdown = clients
+    .filter((c) => {
+      if (statementScope === 'EMPRESA') return c.id === statementCompanyId;
+      return filteredStatementRecords.some((r) => r.clientId === c.id);
+    })
+    .map((c) => {
+      const cRecords = filteredStatementRecords.filter((r) => r.clientId === c.id);
+      const cExams = filteredStatementExams.filter((ex) => ex.clientId === c.id);
+      const cIbc = cRecords.reduce((sum, r) => sum + (r.ibcReported || 0), 0);
+      const cGross = cRecords.reduce((sum, r) => sum + (r.realPaidCommission ?? r.expectedCommission ?? 0), 0);
+      const cRete = cRecords.reduce((sum, r) => sum + (r.retefuenteAmount ?? ((r.realPaidCommission || 0) * 0.10)), 0);
+      const cNet = cRecords.reduce((sum, r) => sum + (r.netCommissionReceived ?? ((r.realPaidCommission || 0) * 0.90)), 0);
+      const cReturn = cRecords.reduce(
+        (sum, r) =>
+          sum + (r.clientReturnAmount ?? ((r.realPaidCommission || 0) * ((r.clientReturnPercentage ?? 25) / 100))),
+        0
+      );
+      const cExamCost = cExams.reduce((sum, ex) => sum + (ex.coveredByReinvestment ? ex.totalCost : 0), 0);
+      const cMargin = cRecords.reduce((sum, r) => sum + (r.agencyNetMargin ?? (cNet - cReturn)), 0);
+
+      return {
+        client: c,
+        planillasCount: cRecords.length,
+        ibc: cIbc,
+        grossCommission: cGross,
+        retefuente: cRete,
+        netReceived: cNet,
+        clientReturn: cReturn,
+        examsCost: cExamCost,
+        bagBalance: Math.max(0, cReturn - cExamCost),
+        netMargin: cMargin,
+      };
+    });
+
+  const getStatementTitle = () => {
+    if (statementScope === 'EMPRESA') {
+      const cl = clients.find((c) => c.id === statementCompanyId);
+      return `Empresa: ${cl ? cl.name : 'Empresa Cliente'}`;
+    }
+    if (statementScope === 'PERIODO') {
+      if (statementPeriodType === 'MES') return `Período Mensual: ${formatMonthLabel(statementMonth)}`;
+      if (statementPeriodType === 'TRIMESTRE') return `Período Trimestral: ${statementQuarter.replace('Q', 'T')} • ${statementYear}`;
+      if (statementPeriodType === 'SEMESTRE') return `Período Semestral: ${statementSemester === 'S1' ? 'Semestre 1' : 'Semestre 2'} • ${statementYear}`;
+      return `Período Anual: ${statementYear === 'TODOS' ? 'Histórico Consolidado' : statementYear}`;
+    }
+    return `Consolidado General • ${statementYear === 'TODOS' ? 'Histórico Completo' : `Año ${statementYear}`}`;
+  };
+
+  const exportStatementToCSV = () => {
+    const headers = [
+      'Empresa Cliente',
+      'NIT',
+      'ARL',
+      'Planillas Conciliadas',
+      'IBC Total (COP)',
+      'Comision Bruta ARL (COP)',
+      'Retefuente 10% (COP)',
+      'Comision Neta 90% (COP)',
+      'Bolsa Retorno SST (COP)',
+      'Inversion Examenes Ocupacionales (COP)',
+      'Saldo Disponible Bolsa (COP)',
+      'Margen Neto PRAXIS (COP)',
+    ];
+
+    const rows = statementCompaniesBreakdown.map((item) => [
+      `"${item.client.name}"`,
+      item.client.nit,
+      item.client.primaryArlId.toUpperCase(),
+      item.planillasCount,
+      Math.round(item.ibc),
+      Math.round(item.grossCommission),
+      Math.round(item.retefuente),
+      Math.round(item.netReceived),
+      Math.round(item.clientReturn),
+      Math.round(item.examsCost),
+      Math.round(item.bagBalance),
+      Math.round(item.netMargin),
+    ]);
+
+    const totalsRow = [
+      '"TOTALES CONSOLIDADOS"',
+      '""',
+      '""',
+      filteredStatementRecords.length,
+      Math.round(stIbc),
+      Math.round(stGrossCommission),
+      Math.round(stRetefuente),
+      Math.round(stNetBank),
+      Math.round(stClientReturn),
+      Math.round(stExamsCost),
+      Math.round(stBagBalance),
+      Math.round(stPraxisNetMargin),
+    ];
+
+    const csvContent =
+      'data:text/csv;charset=utf-8,\uFEFF' +
+      [headers.join(','), ...rows.map((r) => r.join(',')), totalsRow.join(',')].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute(
+      'download',
+      `Estado_Financiero_PRAXIS_${statementScope}_${new Date().toISOString().split('T')[0]}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6 max-w-full">
       {/* Header */}
@@ -329,6 +553,25 @@ export default function ComisionesPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Botón Estado Financiero Oficial */}
+          <button
+            onClick={() => {
+              if (activeClientFilter) {
+                setStatementScope('EMPRESA');
+                setStatementCompanyId(activeClientFilter.id);
+              } else {
+                setStatementScope('GENERAL');
+                setStatementCompanyId(clients[0]?.id || '');
+              }
+              setShowFinancialStatementModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-md shadow-emerald-600/25 transition-all cursor-pointer"
+            title="Generar e imprimir el Estado Financiero Oficial (General, Por Empresa o Por Período)"
+          >
+            <FileText size={15} />
+            <span>Estado Financiero Oficial</span>
+          </button>
+
           <button
             onClick={handleSimulateCSVImport}
             disabled={isImporting}
@@ -668,20 +911,33 @@ export default function ComisionesPage() {
               <strong className="font-extrabold">{activeClientFilter.name}</strong> (NIT {activeClientFilter.nit})
             </span>
           </div>
-          <button
-            onClick={() => {
-              setActiveClientFilter(null);
-              setSearchTerm('');
-              if (typeof window !== 'undefined') {
-                const url = new URL(window.location.href);
-                url.searchParams.delete('cliente');
-                window.history.replaceState({}, '', url.pathname);
-              }
-            }}
-            className="px-3 py-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[11px] border border-slate-200 dark:border-slate-700 transition-all shadow-sm"
-          >
-            ✕ Ver todas las empresas
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setStatementScope('EMPRESA');
+                setStatementCompanyId(activeClientFilter.id);
+                setShowFinancialStatementModal(true);
+              }}
+              className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+            >
+              <FileText size={13} />
+              <span>Estado Financiero de {activeClientFilter.name.split(' ')[0]}</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveClientFilter(null);
+                setSearchTerm('');
+                if (typeof window !== 'undefined') {
+                  const url = new URL(window.location.href);
+                  url.searchParams.delete('cliente');
+                  window.history.replaceState({}, '', url.pathname);
+                }
+              }}
+              className="px-3 py-1 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[11px] border border-slate-200 dark:border-slate-700 transition-all shadow-sm"
+            >
+              ✕ Ver todas las empresas
+            </button>
+          </div>
         </div>
       )}
 
@@ -1424,6 +1680,543 @@ export default function ComisionesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* MODAL: ESTADO FINANCIERO OFICIAL DE INTERMEDIACIÓN & RETORNO SST */}
+      {showFinancialStatementModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl max-w-5xl w-full p-4 sm:p-6 space-y-4 shadow-2xl relative max-h-[95vh] overflow-y-auto">
+            {/* Header del Modal */}
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 no-print">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                  <FileText size={20} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+                    INFORME CONTABLE & FINANCIERO OFICIAL
+                  </span>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                    Estado Financiero de Intermediación & Retorno SST
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={exportStatementToCSV}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                  title="Exportar en formato CSV / Excel"
+                >
+                  <Download size={13} />
+                  <span className="hidden sm:inline">Exportar CSV</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => printDocumentById('estado-financiero-sheet', `Estado Financiero - PRAXIS`)}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/25 transition-all cursor-pointer"
+                  title="Imprimir o guardar en PDF (Cmd+P)"
+                >
+                  <Printer size={13} />
+                  <span>Imprimir PDF</span>
+                </button>
+                <button
+                  onClick={() => setShowFinancialStatementModal(false)}
+                  className="h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center p-1 transition-all"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Selector de Alcance en 3 Dimensiones (General, Por Empresa, Por Período) */}
+            <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3 no-print">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                {/* Tabs de Alcance */}
+                <div className="flex items-center gap-1 bg-slate-200/70 dark:bg-slate-900 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setStatementScope('GENERAL')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      statementScope === 'GENERAL'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Building2 size={13} />
+                    <span>Consolidado General</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatementScope('EMPRESA');
+                      if (!statementCompanyId && clients.length > 0) {
+                        setStatementCompanyId(clients[0].id);
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      statementScope === 'EMPRESA'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Briefcase size={13} />
+                    <span>Por Empresa</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStatementScope('PERIODO')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      statementScope === 'PERIODO'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <CalendarRange size={13} />
+                    <span>Por Período</span>
+                  </button>
+                </div>
+
+                {/* Controles Dinámicos según el Alcance Seleccionado */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Selector de Empresa si el alcance es EMPRESA */}
+                  {statementScope === 'EMPRESA' && (
+                    <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-2.5 py-1 rounded-xl border border-slate-200 dark:border-slate-800">
+                      <span className="text-[11px] font-bold text-slate-500">Empresa:</span>
+                      <select
+                        value={statementCompanyId}
+                        onChange={(e) => setStatementCompanyId(e.target.value)}
+                        className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer max-w-[200px] truncate"
+                      >
+                        {clients.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.primaryArlId.toUpperCase()})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Selector de Tipo de Período si el alcance es PERIODO */}
+                  {statementScope === 'PERIODO' && (
+                    <div className="flex items-center gap-1 bg-slate-200/70 dark:bg-slate-900 p-1 rounded-xl">
+                      {(['ANUAL', 'MES', 'TRIMESTRE', 'SEMESTRE'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setStatementPeriodType(mode)}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                            statementPeriodType === mode
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                          }`}
+                        >
+                          {mode === 'ANUAL' ? 'Año' : mode === 'MES' ? 'Mes' : mode === 'TRIMESTRE' ? 'Trimestre' : 'Semestre'}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Sub-selector de Año */}
+                  {(statementScope === 'GENERAL' || (statementScope === 'PERIODO' && statementPeriodType !== 'MES')) && (
+                    <div className="flex items-center gap-1 bg-white dark:bg-slate-900 px-2 py-1 rounded-xl border border-slate-200 dark:border-slate-800">
+                      <span className="text-[11px] font-bold text-slate-500">Año:</span>
+                      <select
+                        value={statementYear}
+                        onChange={(e) => setStatementYear(e.target.value)}
+                        className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+                      >
+                        <option value="TODOS">Todos</option>
+                        {availableYears.map((y) => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Sub-selector de Mes si es MES */}
+                  {statementScope === 'PERIODO' && statementPeriodType === 'MES' && (
+                    <select
+                      value={statementMonth}
+                      onChange={(e) => setStatementMonth(e.target.value)}
+                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2.5 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+                    >
+                      {availableMonths.map((m) => (
+                        <option key={m} value={m}>📅 {formatMonthLabel(m)}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {/* Sub-selector de Trimestre */}
+                  {statementScope === 'PERIODO' && statementPeriodType === 'TRIMESTRE' && (
+                    <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+                      {(['Q1', 'Q2', 'Q3', 'Q4'] as const).map((q) => (
+                        <button
+                          key={q}
+                          type="button"
+                          onClick={() => setStatementQuarter(q)}
+                          className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                            statementQuarter === q ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          {q.replace('Q', 'T')}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Sub-selector de Semestre */}
+                  {statementScope === 'PERIODO' && statementPeriodType === 'SEMESTRE' && (
+                    <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+                      {(['S1', 'S2'] as const).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setStatementSemester(s)}
+                          className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                            statementSemester === s ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          {s === 'S1' ? 'Semestre 1' : 'Semestre 2'}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60 dark:border-slate-800/60">
+                <span>Alcance Seleccionado: <strong className="text-emerald-700 dark:text-emerald-400 font-bold">{getStatementTitle()}</strong></span>
+                <span>{filteredStatementRecords.length} planillas incluidas</span>
+              </div>
+            </div>
+
+            {/* HOJA IMPRIMIBLE OFICIAL DE ESTADO FINANCIERO (#estado-financiero-sheet) */}
+            <div
+              id="estado-financiero-sheet"
+              className="bg-white text-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-300 dark:border-slate-800 shadow-sm space-y-6 print:border-none print:p-0 print:shadow-none print:m-0 font-sans"
+            >
+              {/* Membrete Institucional PRAXIS */}
+              <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-slate-900 text-white uppercase tracking-wider">
+                      PRAXIS
+                    </span>
+                    <span className="text-xs font-bold uppercase tracking-widest text-slate-700">
+                      Prevención y Seguros Ltda.
+                    </span>
+                  </div>
+                  <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 mt-1">
+                    ESTADO FINANCIERO DE INTERMEDIACIÓN & RETORNO SST
+                  </h1>
+                  <p className="text-[11px] text-slate-600 font-medium">
+                    Corretaje de Seguros ARL & Consultoría en Seguridad y Salud en el Trabajo
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    NIT: 901.482.910-4 | RUI Aseguradoras No. 39104 | Licencia SST Res. 14920
+                  </p>
+                </div>
+
+                <div className="text-right text-[11px] space-y-0.5">
+                  <div className="font-bold text-slate-900 uppercase">Documento Oficial Contable</div>
+                  <div className="text-slate-600">Fecha de Emisión: <strong>{new Date().toISOString().split('T')[0]}</strong></div>
+                  <div className="text-slate-600">Alcance: <strong className="text-emerald-700">{statementScope}</strong></div>
+                  <div className="inline-block px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-bold border border-emerald-300 text-[10px] mt-1">
+                    Exento de IVA (Art. 476 E.T.)
+                  </div>
+                </div>
+              </div>
+
+              {/* Parámetros del Reporte */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Tipo de Alcance</span>
+                  <strong className="text-slate-900 block text-xs">
+                    {statementScope === 'EMPRESA' ? 'Empresa Específica' : statementScope === 'PERIODO' ? 'Período Temporal' : 'Consolidado General'}
+                  </strong>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Período Fiscal / Mes</span>
+                  <strong className="text-slate-900 block text-xs">{getStatementTitle()}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Planillas Conciliadas</span>
+                  <strong className="text-slate-900 block text-xs">{filteredStatementRecords.length} Planillas PILA</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Retención en la Fuente ARL</span>
+                  <strong className="text-rose-600 block text-xs font-mono">10.0% Legal Deducido</strong>
+                </div>
+              </div>
+
+              {/* 5 Cajas Resumen Ejecutivas */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="p-3 rounded-xl bg-slate-100 border border-slate-200">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase block">Masa Salarial (IBC)</span>
+                  <span className="text-sm sm:text-base font-black text-slate-900 font-mono block mt-0.5">{formatCOP(stIbc)}</span>
+                  <span className="text-[9px] text-slate-500">Base Cotización ARL</span>
+                </div>
+                <div className="p-3 rounded-xl bg-blue-50 border border-blue-200">
+                  <span className="text-[10px] font-bold text-blue-700 uppercase block">Comisión Bruta ARL</span>
+                  <span className="text-sm sm:text-base font-black text-blue-900 font-mono block mt-0.5">{formatCOP(stGrossCommission)}</span>
+                  <span className="text-[9px] text-blue-600 font-semibold">Sin IVA Art. 476</span>
+                </div>
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200">
+                  <span className="text-[10px] font-bold text-rose-700 uppercase block">Retefuente 10%</span>
+                  <span className="text-sm sm:text-base font-black text-rose-900 font-mono block mt-0.5">-{formatCOP(stRetefuente)}</span>
+                  <span className="text-[9px] text-rose-600">Deducido por ARL</span>
+                </div>
+                <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200">
+                  <span className="text-[10px] font-bold text-indigo-700 uppercase block">Retorno SST Clientes</span>
+                  <span className="text-sm sm:text-base font-black text-indigo-900 font-mono block mt-0.5">-{formatCOP(stClientReturn)}</span>
+                  <span className="text-[9px] text-indigo-600">Bolsa Reinversión</span>
+                </div>
+                <div className="p-3 rounded-xl bg-emerald-100 border border-emerald-300 col-span-2 sm:col-span-1">
+                  <span className="text-[10px] font-extrabold text-emerald-800 uppercase block">Margen Neto PRAXIS</span>
+                  <span className="text-base sm:text-lg font-black text-emerald-950 font-mono block mt-0.5">{formatCOP(stPraxisNetMargin)}</span>
+                  <span className="text-[9px] text-emerald-800 font-bold">Ingreso Neto Real</span>
+                </div>
+              </div>
+
+              {/* TABLA PRINCIPAL DEL ESTADO DE RESULTADOS (PyG DE INTERMEDIACIÓN) */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 border-b border-slate-300 pb-1">
+                  1. Estado de Resultados de Intermediación & Retorno SST (PyG)
+                </h4>
+                <div className="overflow-x-auto rounded-xl border border-slate-300">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-100 border-b border-slate-300 text-slate-700">
+                      <tr>
+                        <th className="p-2.5 font-bold">Concepto Contable y Tributario</th>
+                        <th className="p-2.5 text-right font-bold w-44">Monto Liquidado (COP)</th>
+                        <th className="p-2.5 text-left font-bold w-64 hidden sm:table-cell">Base Legal / Normativa Aplicada</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 font-sans">
+                      <tr className="hover:bg-slate-50">
+                        <td className="p-2.5 font-bold text-slate-900">1. INGRESOS OPERACIONALES BRUTOS DE INTERMEDIACIÓN</td>
+                        <td className="p-2.5 text-right font-mono font-extrabold text-slate-900">{formatCOP(stGrossCommission)}</td>
+                        <td className="p-2.5 text-[11px] text-slate-600 hidden sm:table-cell">Exento de IVA según Sentencia C-049 de 2022 de la Corte Constitucional y Art. 476 E.T.</td>
+                      </tr>
+                      <tr className="hover:bg-slate-50 bg-rose-50/30">
+                        <td className="p-2.5 pl-6 text-slate-700 font-medium">
+                          (-) Menos: Retención en la Fuente Deducida por la ARL (10.0%)
+                        </td>
+                        <td className="p-2.5 text-right font-mono font-bold text-rose-700">-{formatCOP(stRetefuente)}</td>
+                        <td className="p-2.5 text-[11px] text-slate-600 hidden sm:table-cell">Art. 392 del Estatuto Tributario (Tarifa sobre comisiones y corretaje)</td>
+                      </tr>
+                      <tr className="bg-blue-50/50 font-semibold text-slate-900">
+                        <td className="p-2.5 font-bold text-blue-900">(=) INGRESO NETO PERCIBIDO EN BANCOS (90%)</td>
+                        <td className="p-2.5 text-right font-mono font-black text-blue-900">{formatCOP(stNetReceived)}</td>
+                        <td className="p-2.5 text-[11px] text-blue-800 hidden sm:table-cell">Giro efectivo efectuado por las aseguradoras a cuentas de PRAXIS</td>
+                      </tr>
+                      <tr className="hover:bg-slate-50 bg-indigo-50/30">
+                        <td className="p-2.5 pl-6 text-slate-700 font-medium">
+                          (-) Menos: Contraprestación y Bolsa de Retorno SST Pactada a Clientes
+                        </td>
+                        <td className="p-2.5 text-right font-mono font-bold text-indigo-700">-{formatCOP(stClientReturn)}</td>
+                        <td className="p-2.5 text-[11px] text-slate-600 hidden sm:table-cell">Acuerdo comercial (25% - 30%) para reinversión en visitas y salud ocupacional</td>
+                      </tr>
+                      <tr className="hover:bg-slate-50 text-[11px] text-slate-600 pl-10">
+                        <td className="p-2 pl-12 italic text-slate-600">
+                          • Inversión Ejecutada en Exámenes Médicos Ocupacionales (Res. 1843/2346):
+                        </td>
+                        <td className="p-2 text-right font-mono text-slate-700 italic">{formatCOP(stExamsCost)}</td>
+                        <td className="p-2 text-[10px] text-slate-500 hidden sm:table-cell">Cubierto 100% por bolsa de reinversión ($0 desembolso directo para la empresa)</td>
+                      </tr>
+                      <tr className="hover:bg-slate-50 text-[11px] text-slate-600 pl-10">
+                        <td className="p-2 pl-12 italic text-slate-600">
+                          • Saldo Disponible en Bolsa de Acompañamiento SST:
+                        </td>
+                        <td className="p-2 text-right font-mono text-emerald-700 font-semibold">{formatCOP(stBagBalance)}</td>
+                        <td className="p-2 text-[10px] text-slate-500 hidden sm:table-cell">Fondo disponible para futuras visitas técnicas o exámenes complementarios</td>
+                      </tr>
+                      <tr className="bg-emerald-100/70 border-t-2 border-emerald-600 font-black text-emerald-950 text-sm">
+                        <td className="p-3 font-extrabold uppercase tracking-wide">
+                          (=) UTILIDAD NETA / MARGEN NETO REAL DE PRAXIS (AGENCIA)
+                        </td>
+                        <td className="p-3 text-right font-mono font-black text-emerald-950 text-base">
+                          {formatCOP(stPraxisNetMargin)}
+                        </td>
+                        <td className="p-3 text-[11px] text-emerald-900 hidden sm:table-cell font-bold">
+                          Rendimiento real libre disponible para la agencia de intermediación
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* TABLA DETALLADA POR EMPRESA CLIENTE (Si hay varias empresas) */}
+              {statementCompaniesBreakdown.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 border-b border-slate-300 pb-1">
+                    2. Desglose de Liquidación por Empresa Cliente
+                  </h4>
+                  <div className="overflow-x-auto rounded-xl border border-slate-300">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-slate-100 border-b border-slate-300 text-slate-700">
+                        <tr>
+                          <th className="p-2 font-bold">Empresa Cliente</th>
+                          <th className="p-2 font-bold">NIT</th>
+                          <th className="p-2 font-bold text-center">ARL</th>
+                          <th className="p-2 text-center font-bold">Planillas</th>
+                          <th className="p-2 text-right font-bold">Comisión Bruta</th>
+                          <th className="p-2 text-right font-bold">Retefuente 10%</th>
+                          <th className="p-2 text-right font-bold">Retorno SST</th>
+                          <th className="p-2 text-right font-bold">Margen PRAXIS</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {statementCompaniesBreakdown.map((item) => (
+                          <tr key={item.client.id} className="hover:bg-slate-50">
+                            <td className="p-2 font-bold text-slate-900">{item.client.name}</td>
+                            <td className="p-2 text-slate-600 font-mono text-[11px]">{item.client.nit}</td>
+                            <td className="p-2 text-center uppercase font-mono font-bold text-blue-700 text-[11px]">
+                              {item.client.primaryArlId}
+                            </td>
+                            <td className="p-2 text-center font-mono">{item.planillasCount}</td>
+                            <td className="p-2 text-right font-mono font-medium">{formatCOP(item.grossCommission)}</td>
+                            <td className="p-2 text-right font-mono text-rose-700">-{formatCOP(item.retefuente)}</td>
+                            <td className="p-2 text-right font-mono text-indigo-700">-{formatCOP(item.clientReturn)}</td>
+                            <td className="p-2 text-right font-mono font-extrabold text-emerald-800">{formatCOP(item.netMargin)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-slate-100 border-t-2 border-slate-400 font-bold text-slate-900">
+                        <tr>
+                          <td colSpan={4} className="p-2 uppercase tracking-wide">Totales Consolidados ({statementCompaniesBreakdown.length} empresas):</td>
+                          <td className="p-2 text-right font-mono font-black">{formatCOP(stGrossCommission)}</td>
+                          <td className="p-2 text-right font-mono text-rose-700 font-black">-{formatCOP(stRetefuente)}</td>
+                          <td className="p-2 text-right font-mono text-indigo-700 font-black">-{formatCOP(stClientReturn)}</td>
+                          <td className="p-2 text-right font-mono text-emerald-900 font-black text-sm">{formatCOP(stPraxisNetMargin)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Detalle de Planillas PILA Conciliadas */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 border-b border-slate-300 pb-1">
+                  3. Relación de Planillas PILA Conciliadas en el Período ({filteredStatementRecords.length})
+                </h4>
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-left text-[11px] border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                      <tr>
+                        <th className="p-1.5 font-bold">Periodo</th>
+                        <th className="p-1.5 font-bold">Empresa</th>
+                        <th className="p-1.5 font-bold">ARL</th>
+                        <th className="p-1.5 text-right font-bold">IBC Declarado</th>
+                        <th className="p-1.5 text-right font-bold">Comisión Bruta</th>
+                        <th className="p-1.5 text-right font-bold">Retefuente</th>
+                        <th className="p-1.5 text-right font-bold">Retorno SST</th>
+                        <th className="p-1.5 text-right font-bold">Margen PRAXIS</th>
+                        <th className="p-1.5 text-center font-bold">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {filteredStatementRecords.map((rec) => (
+                        <tr key={rec.id} className="hover:bg-slate-50">
+                          <td className="p-1.5 font-mono font-semibold">{rec.month}</td>
+                          <td className="p-1.5 font-medium truncate max-w-[150px]">{rec.clientName}</td>
+                          <td className="p-1.5 uppercase font-mono text-slate-600">{rec.arlId || 'SURA'}</td>
+                          <td className="p-1.5 text-right font-mono">${Math.round(rec.ibcReported).toLocaleString('es-CO')}</td>
+                          <td className="p-1.5 text-right font-mono">${Math.round(rec.realPaidCommission || rec.expectedCommission).toLocaleString('es-CO')}</td>
+                          <td className="p-1.5 text-right font-mono text-rose-700">-${Math.round(rec.retefuenteAmount || 0).toLocaleString('es-CO')}</td>
+                          <td className="p-1.5 text-right font-mono text-indigo-700">-${Math.round(rec.clientReturnAmount || 0).toLocaleString('es-CO')}</td>
+                          <td className="p-1.5 text-right font-mono font-bold text-emerald-800">${Math.round(rec.agencyNetMargin || 0).toLocaleString('es-CO')}</td>
+                          <td className="p-1.5 text-center">
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                              {rec.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Nota Legal & Certificación */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-300 text-[10.5px] text-slate-700 leading-relaxed">
+                <strong className="text-slate-900 block mb-0.5">Certificación Legal & Tributaria de los Recursos:</strong>
+                El presente Estado Financiero certifica los ingresos derivados de las comisiones de intermediación en el Sistema General de Riesgos Laborales. Se deja constancia de que los valores liquidados no generan Impuesto sobre las Ventas (IVA) en virtud de la <strong>Sentencia C-049 de 2022 de la Corte Constitucional</strong> y el <strong>Art. 476 del Estatuto Tributario</strong>. Las retenciones en la fuente corresponden a la tarifa legal del 10% practicada por las entidades aseguradoras ARL (Art. 392 E.T.). Los montos asignados a la Bolsa de Retorno SST se encuentran comprometidos contractualmente con cada empresa para la ejecución de actividades de medicina preventiva, exámenes ocupacionales y asesoría técnica especializada.
+              </div>
+
+              {/* Firmas Oficiales */}
+              <div className="pt-6 grid grid-cols-2 gap-12 page-break-inside-avoid">
+                <div className="border-t-2 border-slate-900 pt-2 space-y-1">
+                  <p className="font-bold uppercase text-slate-900 text-xs">
+                    ING. FÉLIX BEDOYA
+                  </p>
+                  <p className="text-[10px] text-slate-600 font-semibold">
+                    Especialista en SG-SST • Licencia No. 14920
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    Director Técnico y Representante Intermediario
+                  </p>
+                  <p className="text-[9px] text-slate-400 font-mono">PRAXIS Prevención y Seguros Ltda. • NIT: 901.482.910-4</p>
+                </div>
+
+                <div className="border-t-2 border-slate-900 pt-2 space-y-1">
+                  <p className="font-bold uppercase text-slate-900 text-xs">
+                    DIRECCIÓN FINANCIERA & AUDITORÍA
+                  </p>
+                  <p className="text-[10px] text-slate-600 font-semibold">
+                    Certificación de Conciliación de Comisiones & PILA
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    Área Contable y Tributaria
+                  </p>
+                  <p className="text-[9px] text-slate-400 font-mono">Generado mediante Plataforma Digital PRAXIS v3.0</p>
+                </div>
+              </div>
+
+              {/* Pie de Página */}
+              <div className="pt-4 border-t border-slate-300 font-sans text-[9px] text-slate-500 flex justify-between items-center">
+                <span>Estado Financiero emitido para fines gerenciales, contables y de auditoría de comisiones ARL.</span>
+                <span>Documento Válido Oficial • PRAXIS Prevención y Seguros Ltda.</span>
+              </div>
+            </div>
+
+            {/* Footer Modal con Botones */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-800 no-print">
+              <span className="text-xs text-slate-500 font-medium">
+                Tip: Presiona <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-[10px] font-mono">Cmd+P</kbd> o <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-[10px] font-mono">Ctrl+P</kbd> para imprimir directamente.
+              </span>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowFinancialStatementModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs cursor-pointer"
+                >
+                  Cerrar
+                </button>
+                <button
+                  type="button"
+                  onClick={exportStatementToCSV}
+                  className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Download size={14} /> Exportar CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => printDocumentById('estado-financiero-sheet', `Estado Financiero - PRAXIS`)}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/30 cursor-pointer"
+                >
+                  <Printer size={14} /> Imprimir Estado Financiero
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
