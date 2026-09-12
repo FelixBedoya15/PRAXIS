@@ -27,13 +27,53 @@ import {
   FileText,
   Target,
   ChevronRight,
-  PieChart,
+  PieChart as PieChartIcon,
   BarChart3,
-  MessageSquare
+  MessageSquare,
+  Award,
 } from 'lucide-react';
-import { getStoredARLs, getStoredClients, getStoredPilaRecords, getStoredFieldVisits, getStoredLeads, getStoredAgencyProfile } from '@/lib/storage';
-import { ARLCompany, ClientCompany, PilaRecord, FieldVisit, LeadProspect, RISK_RATES, RiskClass, AgencyProfile } from '@/types';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
+  CartesianGrid,
+} from 'recharts';
+import {
+  getStoredARLs,
+  getStoredClients,
+  getStoredPilaRecords,
+  getStoredFieldVisits,
+  getStoredLeads,
+  getStoredAgencyProfile,
+  getStoredMedicalRecords,
+} from '@/lib/storage';
+import {
+  ARLCompany,
+  ClientCompany,
+  PilaRecord,
+  FieldVisit,
+  LeadProspect,
+  RISK_RATES,
+  RiskClass,
+  AgencyProfile,
+  MedicalRecord,
+} from '@/types';
 import { calculateCompanyFinancials } from '@/lib/calculations';
+
+const RISK_COLORS: Record<RiskClass, string> = {
+  CLASE_I: '#10b981',    // Emerald
+  CLASE_II: '#3b82f6',   // Blue
+  CLASE_III: '#f59e0b',  // Amber
+  CLASE_IV: '#f97316',   // Orange
+  CLASE_V: '#ef4444',    // Rose
+};
 
 export default function DashboardPage() {
   const [arls, setArls] = useState<ARLCompany[]>([]);
@@ -41,14 +81,18 @@ export default function DashboardPage() {
   const [leads, setLeads] = useState<LeadProspect[]>([]);
   const [pilaRecords, setPilaRecords] = useState<PilaRecord[]>([]);
   const [fieldVisits, setFieldVisits] = useState<FieldVisit[]>([]);
+  const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
   const [agencyProfile, setAgencyProfile] = useState<AgencyProfile | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
     setArls(getStoredARLs());
     setClients(getStoredClients());
     setLeads(getStoredLeads());
     setPilaRecords(getStoredPilaRecords());
     setFieldVisits(getStoredFieldVisits());
+    setMedicalRecords(getStoredMedicalRecords());
     setAgencyProfile(getStoredAgencyProfile());
 
     const handleProfileUpdated = () => {
@@ -60,6 +104,7 @@ export default function DashboardPage() {
       setLeads(getStoredLeads());
       setPilaRecords(getStoredPilaRecords());
       setFieldVisits(getStoredFieldVisits());
+      setMedicalRecords(getStoredMedicalRecords());
       setAgencyProfile(getStoredAgencyProfile());
     };
     window.addEventListener('praxis_profile_updated', handleProfileUpdated);
@@ -143,7 +188,7 @@ export default function DashboardPage() {
     }
   };
 
-  // ARL Distribution
+  // ARL Distribution Data for Tables & Charts
   const arlStats = arls.map((arl) => {
     const arlClients = clients.filter((c) => c.primaryArlId === arl.id);
     const arlIbc = arlClients.reduce((sum, c) => {
@@ -163,6 +208,100 @@ export default function DashboardPage() {
       percentage: pct,
     };
   }).filter((a) => a.clientCount > 0 || a.ibc > 0);
+
+  const arlChartData = arls.map((arl) => {
+    const arlClients = clients.filter((c) => c.primaryArlId === arl.id);
+    const arlIbc = arlClients.reduce((sum, c) => {
+      const fin = calculateCompanyFinancials(c, arl);
+      return sum + fin.totalIbc;
+    }, 0);
+    const arlCommission = arlClients.reduce((sum, c) => {
+      const fin = calculateCompanyFinancials(c, arl);
+      return sum + fin.totalCommission;
+    }, 0);
+    return {
+      name: arl.shortName || arl.name,
+      logo: arl.logo || '🛡️',
+      ibc: arlIbc,
+      commission: arlCommission,
+      clientCount: arlClients.length,
+    };
+  }).filter((a) => a.ibc > 0 || a.commission > 0);
+
+  // Risk Pie Chart Data
+  const riskPieData = (Object.keys(RISK_RATES) as RiskClass[]).map((r) => {
+    const def = RISK_RATES[r];
+    const value = riskDistribution[r] || 0;
+    const percentage = totalIbc > 0 ? ((value / totalIbc) * 100).toFixed(1) : '0';
+    return {
+      name: `${r.replace('_', ' ')} (${def.percentageText})`,
+      rawClass: r,
+      value,
+      percentage,
+      color: RISK_COLORS[r],
+    };
+  }).filter((d) => d.value > 0);
+
+  // Health & Medicine Metrics
+  const totalDaysLost = medicalRecords.reduce((sum, m) => sum + (m.daysLost || 0), 0);
+  const accidentesCount = medicalRecords.filter((m) => m.incidentType === 'ACCIDENTE_TRABAJO').length;
+  const examenesCount = medicalRecords.filter((m) => m.incidentType === 'EXAMEN_MEDICO').length;
+  const pveActiveCount = medicalRecords.filter((m) => m.pveProgram && m.pveProgram !== 'NINGUNO').length;
+
+  // Res 0312 Compliance Metrics
+  const clientsWithScore = clients.filter((c) => c.standardsScore !== undefined);
+  const avgStandardsScore = clientsWithScore.length > 0
+    ? Math.round(clientsWithScore.reduce((sum, c) => sum + (c.standardsScore || 0), 0) / clientsWithScore.length)
+    : 0;
+
+  // Pipeline Stages Funnel
+  const pipelineStages = [
+    { key: 'NUEVO_LEAD', label: 'Nuevo', color: 'bg-blue-500' },
+    { key: 'DIAGNOSTICO_ARL', label: 'Diagnóstico', color: 'bg-indigo-500' },
+    { key: 'PROPUESTA_ENVIADA', label: 'Propuesta', color: 'bg-amber-500' },
+    { key: 'CARTA_NOMBRAMIENTO', label: 'Carta Nombramiento', color: 'bg-emerald-500' },
+  ];
+
+  // Custom Chart Tooltips
+  const CustomBarTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="p-3 bg-slate-900 text-white border border-slate-700 rounded-2xl shadow-xl text-xs space-y-1.5">
+          <p className="font-bold text-slate-100 border-b border-slate-800 pb-1 flex items-center gap-1.5">
+            <span>🛡️</span> {label}
+          </p>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-blue-400">Nómina IBC:</span>
+            <span className="font-mono font-bold text-white">{formatCOP(payload[0]?.value || 0)}</span>
+          </div>
+          {payload[1] && (
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-emerald-400">Comisión Mensual:</span>
+              <span className="font-mono font-bold text-white">{formatCOP(payload[1]?.value || 0)}</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomPieTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0];
+      return (
+        <div className="p-3 bg-slate-900 text-white border border-slate-700 rounded-2xl shadow-xl text-xs space-y-1">
+          <p className="font-bold text-slate-200">{data.name}</p>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-slate-400">Masa Salarial:</span>
+            <span className="font-mono font-bold text-white">{formatCOP(data.value)}</span>
+          </div>
+          <p className="text-[10px] text-emerald-400 font-mono text-right">{data.payload.percentage}% del total</p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="space-y-5 max-w-full animate-fade-in pb-8">
@@ -281,11 +420,11 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Card 4: Horas Técnicas SST RUI */}
+        {/* Card 4: Horas Técnicas SST */}
         <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 hover:border-emerald-500/40 transition-all group shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between text-slate-500 dark:text-slate-400 mb-2">
-              <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Prevención & RUI</span>
+              <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider">Prevención SG-SST</span>
               <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
                 <HardHat size={17} />
               </div>
@@ -299,121 +438,353 @@ export default function DashboardPage() {
               {fieldVisits.length} visitas ejecutadas
             </span>
             <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono text-[10px] shrink-0">
-              MinTrabajo
+              Campo SST
             </span>
           </div>
         </div>
       </div>
 
-      {/* Row 2: Visual Analytics & Breakdown */}
+      {/* Row 2: Dynamic Interactive Charts (Recharts) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Left 2 Cols: ARL Market Share & Risk Class Mix */}
-        <div className="lg:col-span-2 space-y-5">
-          {/* Card: Cartera por ARL */}
-          <div className="p-4 sm:p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block">
-                  DISTRIBUCIÓN DE INTERMEDIACIÓN
-                </span>
-                <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
-                  Participación de Cartera por ARL
-                </h3>
-              </div>
-              <Link
-                href="/arl-config"
-                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-              >
-                Directorio ARL ➔
-              </Link>
-            </div>
-
-            <div className="space-y-3.5">
-              {arlStats.map((a) => (
-                <div key={a.id} className="space-y-1.5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
-                    <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200 min-w-0">
-                      <span className="text-base shrink-0">{a.logo}</span>
-                      <span className="truncate">{a.name}</span>
-                      <span className="text-[10px] font-normal text-slate-500 shrink-0">
-                        ({a.clientCount} {a.clientCount === 1 ? 'empresa' : 'empresas'})
-                      </span>
-                    </div>
-                    <div className="flex sm:flex-col sm:text-right items-baseline sm:items-end justify-between gap-2 sm:gap-0 font-mono shrink-0">
-                      <strong className="text-slate-900 dark:text-white text-xs">{formatCOP(a.ibc)}</strong>
-                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                        Comisión: {formatCOP(a.commission)}/m
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-blue-600 to-indigo-500 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.max(a.percentage, 8)}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Card: Masa Salarial por Clases de Riesgo y Centros de Trabajo */}
-          <div className="p-4 sm:p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        {/* Dynamic Chart 1: Participación y Comisiones por Aseguradora ARL */}
+        <div className="lg:col-span-2 p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 block">
-                COMPOSICIÓN DE RIESGO
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                <BarChart3 size={13} /> Analítica Financiera por Aseguradora
               </span>
               <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
-                Masa Salarial por Clases de Riesgo (Centros de Trabajo)
+                Distribución de Cartera & Comisiones por ARL
               </h3>
             </div>
+            <Link
+              href="/comisiones"
+              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 self-start sm:self-auto"
+            >
+              Liquidador PILA ➔
+            </Link>
+          </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5 text-xs">
-              {Object.keys(RISK_RATES).map((rKey) => {
-                const r = rKey as RiskClass;
-                const def = RISK_RATES[r];
-                const ibcVal = riskDistribution[r] || 0;
-                const pct = totalIbc > 0 ? ((ibcVal / totalIbc) * 100).toFixed(1) : '0';
+          <div className="h-64 sm:h-72 w-full pt-2">
+            {isMounted ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={arlChartData} margin={{ top: 10, right: 10, left: 0, bottom: 25 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                  <XAxis
+                    dataKey="name"
+                    stroke="#94a3b8"
+                    fontSize={11}
+                    tickLine={false}
+                    interval={0}
+                    tick={{ fill: 'currentColor' }}
+                  />
+                  <YAxis
+                    stroke="#94a3b8"
+                    fontSize={10}
+                    tickLine={false}
+                    tickFormatter={(val) => `$${(val / 1000000).toFixed(0)}M`}
+                  />
+                  <Tooltip content={<CustomBarTooltip />} />
+                  <Legend
+                    verticalAlign="top"
+                    height={36}
+                    wrapperStyle={{ fontSize: '11px', fontWeight: 600 }}
+                  />
+                  <Bar
+                    dataKey="ibc"
+                    name="Nómina Total (IBC)"
+                    fill="#3b82f6"
+                    radius={[8, 8, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="commission"
+                    name="Comisión Mensual"
+                    fill="#10b981"
+                    radius={[8, 8, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full w-full flex items-center justify-center text-slate-400 text-xs">
+                Cargando gráfica dinámica...
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Dynamic Chart 2: Donut Chart Distribución de Riesgos */}
+        <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4 flex flex-col justify-between">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+              <PieChartIcon size={13} /> Matriz de Riesgo Normativa
+            </span>
+            <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+              Composición de Riesgo (Centros de Trabajo)
+            </h3>
+          </div>
+
+          <div className="h-56 sm:h-60 w-full relative">
+            {isMounted ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={riskPieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={75}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {riskPieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomPieTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full w-full flex items-center justify-center text-slate-400 text-xs">
+                Cargando distribución...
+              </div>
+            )}
+          </div>
+
+          {/* Clean Legend Chips */}
+          <div className="flex flex-wrap gap-1.5 justify-center pt-1 border-t border-slate-100 dark:border-slate-800/80">
+            {riskPieData.map((r) => (
+              <span
+                key={r.rawClass}
+                className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold flex items-center gap-1 border border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+              >
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
+                {r.rawClass.replace('_', ' ')}: {r.percentage}%
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: Comprehensive Multi-Module Intelligence */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Left 2 Cols: Operational SST Compliance & Medical Surveillance */}
+        <div className="lg:col-span-2 space-y-5">
+          {/* Module 1: Estándares Mínimos Res. 0312 de 2019 */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                  <Award size={13} /> Cumplimiento Normativo Res. 0312 de 2019
+                </span>
+                <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                  Índice de Madurez SG-SST de Empresas Afiliadas
+                </h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-mono font-bold text-xs">
+                  Promedio Portafolio: {avgStandardsScore}%
+                </span>
+                <Link
+                  href="/campo-sst"
+                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
+                >
+                  Auditar ➔
+                </Link>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-1">
+              {clients.map((client) => {
+                const score = client.standardsScore ?? 0;
+                const isEvaluated = client.standardsScore !== undefined;
+                const statusColor = score >= 86 ? 'bg-emerald-500' : score >= 60 ? 'bg-amber-500' : 'bg-rose-500';
+                const statusBadge = score >= 86
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                  : score >= 60
+                  ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                  : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800';
 
                 return (
                   <div
-                    key={r}
-                    className="p-3 sm:p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-2 min-w-0"
+                    key={client.id}
+                    className="p-3 sm:p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
                   >
-                    <div>
-                      <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 block">
-                        {def.percentageText}
-                      </span>
-                      <strong className="text-xs font-bold text-slate-900 dark:text-white block mt-0.5 truncate">
-                        {r.replace('_', ' ')}
-                      </strong>
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <strong className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {client.name}
+                        </strong>
+                        <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 shrink-0">
+                          (NIT: {client.nit})
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                        <span>{client.economicActivity}</span>
+                        <span>•</span>
+                        <span>{client.standardsCount || 60} Estándares</span>
+                      </div>
                     </div>
 
-                    <div>
-                      <div className="font-mono font-bold text-slate-800 dark:text-slate-200 text-[11px] sm:text-xs truncate">
-                        {formatCOP(ibcVal)}
+                    <div className="flex items-center gap-3 sm:w-60 shrink-0">
+                      <div className="flex-1">
+                        <div className="flex justify-between text-[10px] font-mono font-bold mb-1">
+                          <span className="text-slate-500">Calificación:</span>
+                          <span className="text-slate-900 dark:text-white">{isEvaluated ? `${score}%` : 'Pendiente'}</span>
+                        </div>
+                        <div className="h-2 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full ${statusColor} rounded-full transition-all duration-500`}
+                            style={{ width: `${isEvaluated ? score : 0}%` }}
+                          />
+                        </div>
                       </div>
-                      <span className="text-[10px] text-slate-500 font-mono block mt-0.5">{pct}% del total</span>
+
+                      <span
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border shrink-0 ${
+                          isEvaluated ? statusBadge : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700'
+                        }`}
+                      >
+                        {isEvaluated ? client.standardsRating || 'Aceptable' : 'Sin auditar'}
+                      </span>
                     </div>
                   </div>
                 );
               })}
             </div>
           </div>
+
+          {/* Module 2: Vigilancia Médica & Salud Laboral */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                  <Stethoscope size={13} /> Medicina Laboral & Ausentismo
+                </span>
+                <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                  Programas de Vigilancia Epidemiológica & Accidentalidad
+                </h3>
+              </div>
+              <Link
+                href="/medico"
+                className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1"
+              >
+                Módulo Médico ➔
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-2xl bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 space-y-1">
+                <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase block">
+                  Días Perdidos
+                </span>
+                <div className="text-lg sm:text-xl font-black text-rose-700 dark:text-rose-300 font-mono">
+                  {totalDaysLost} días
+                </div>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Ausentismo total</span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 space-y-1">
+                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase block">
+                  FURAT Radicados
+                </span>
+                <div className="text-lg sm:text-xl font-black text-amber-700 dark:text-amber-300 font-mono">
+                  {accidentesCount} casos
+                </div>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Accidentes de trabajo</span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 space-y-1">
+                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase block">
+                  Exámenes Ocup.
+                </span>
+                <div className="text-lg sm:text-xl font-black text-blue-700 dark:text-blue-300 font-mono">
+                  {examenesCount} registros
+                </div>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Ingreso / Egreso / Per.</span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 space-y-1">
+                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase block">
+                  PVE Activos
+                </span>
+                <div className="text-lg sm:text-xl font-black text-indigo-700 dark:text-indigo-300 font-mono">
+                  {pveActiveCount} casos
+                </div>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Osteomuscular / Psico</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Right Col: Operative Alerts & Fast Actions */}
+        {/* Right Col: Commercial Pipeline & Operational Alerts */}
         <div className="space-y-5">
-          {/* Card: Alertas Operativas */}
-          <div className="p-4 sm:p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          {/* Module 3: Embudo Comercial de Leads */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400 flex items-center gap-1.5">
+                  <Target size={13} /> Embudo de Conversión ARL
+                </span>
+                <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                  Pipeline Comercial Activo
+                </h3>
+              </div>
+              <Link
+                href="/clientes"
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+              >
+                Ver Leads ➔
+              </Link>
+            </div>
+
+            <div className="space-y-3">
+              {pipelineStages.map((stg) => {
+                const stageLeads = leads.filter((l) => l.stage === stg.key);
+                const stageCommission = stageLeads.reduce((sum, l) => {
+                  const arl = arls.find((a) => a.id === l.proposedArlId);
+                  const fin = calculateCompanyFinancials(l, arl);
+                  return sum + fin.totalCommission;
+                }, 0);
+                const pct = leads.length > 0 ? (stageLeads.length / leads.length) * 100 : 0;
+
+                return (
+                  <div
+                    key={stg.key}
+                    className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200">
+                        <span className={`w-2.5 h-2.5 rounded-full ${stg.color} shrink-0`} />
+                        <span>{stg.label}</span>
+                        <span className="text-[10px] font-normal text-slate-500">
+                          ({stageLeads.length} {stageLeads.length === 1 ? 'prospecto' : 'prospectos'})
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs">
+                        {formatCOP(stageCommission)}/m
+                      </span>
+                    </div>
+
+                    <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${stg.color} rounded-full transition-all duration-500`}
+                        style={{ width: `${Math.max(pct, stageLeads.length > 0 ? 12 : 0)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Module 4: Alertas Operativas en Tiempo Real */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                 <AlertCircle size={16} className="text-amber-500 shrink-0" /> Alertas Operativas
               </h3>
               <span className="text-[10px] font-mono font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800 shrink-0">
-                {moraCount + divergenciaCount} Activas
+                {pilaRecords.filter((r) => r.status === 'MORA' || r.status === 'DIVERGENCIA').length} Novedades
               </span>
             </div>
 
@@ -432,7 +803,7 @@ export default function DashboardPage() {
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2">
-                      {rec.notes || `Planilla ${rec.month} presenta novedad en pago.`}
+                      {rec.notes || `Planilla ${rec.month} presenta novedad en recaudo de comisión.`}
                     </p>
                   </div>
                 ))}
@@ -453,47 +824,6 @@ export default function DashboardPage() {
                   </p>
                 </div>
               ))}
-            </div>
-          </div>
-
-          {/* Card: Accesos Rápidos */}
-          <div className="p-4 sm:p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-            <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
-              Gestión Rápida de Módulos
-            </h3>
-
-            <div className="grid grid-cols-2 gap-2">
-              <Link
-                href="/clientes"
-                className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 hover:bg-blue-600 hover:text-white text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 text-center font-bold text-xs transition-all flex flex-col items-center gap-1.5 shadow-sm"
-              >
-                <Users size={16} className="text-blue-500" />
-                <span className="truncate">Clientes</span>
-              </Link>
-
-              <Link
-                href="/comisiones"
-                className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 hover:bg-emerald-600 hover:text-white text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 text-center font-bold text-xs transition-all flex flex-col items-center gap-1.5 shadow-sm"
-              >
-                <Calculator size={16} className="text-emerald-500" />
-                <span className="truncate">Liquidar PILA</span>
-              </Link>
-
-              <Link
-                href="/campo-sst"
-                className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 hover:bg-amber-600 hover:text-white text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 text-center font-bold text-xs transition-all flex flex-col items-center gap-1.5 shadow-sm"
-              >
-                <HardHat size={16} className="text-amber-500" />
-                <span className="truncate">Res. 0312</span>
-              </Link>
-
-              <Link
-                href="/wappy-ia"
-                className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 hover:bg-indigo-600 hover:text-white text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 text-center font-bold text-xs transition-all flex flex-col items-center gap-1.5 shadow-sm"
-              >
-                <Bot size={16} className="text-indigo-500" />
-                <span className="truncate">Asistente IA</span>
-              </Link>
             </div>
           </div>
         </div>

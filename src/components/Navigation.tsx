@@ -164,16 +164,16 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
       roles: ['ADMIN', 'ANALISTA_FINANCIERO', 'INGENIERO_SST', 'MEDICO_LABORAL', 'ASESOR_COMERCIAL'],
     },
     {
-      href: '/clientes',
-      label: 'Empresas & Leads',
-      icon: Building2,
-      roles: ['ADMIN', 'ANALISTA_FINANCIERO', 'INGENIERO_SST', 'ASESOR_COMERCIAL'],
-    },
-    {
       href: '/comisiones',
       label: 'PILA & Comisiones',
       icon: Calculator,
       roles: ['ADMIN', 'ANALISTA_FINANCIERO'],
+    },
+    {
+      href: '/clientes',
+      label: 'Empresas & Leads',
+      icon: Building2,
+      roles: ['ADMIN', 'ANALISTA_FINANCIERO', 'INGENIERO_SST', 'ASESOR_COMERCIAL'],
     },
     {
       href: '/campo-sst',
