@@ -493,13 +493,13 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
                 {dbEngine === 'POSTGRESQL'
                   ? 'PostgreSQL Activo'
                   : isDbConnected
-                  ? 'Servidor Persistente'
+                  ? 'BD Integrada Activa'
                   : isOnline
                   ? 'Caché Local'
                   : 'Offline'}
               </span>
               <span className="font-mono text-[10px] text-slate-400">
-                {dbEngine === 'POSTGRESQL' ? 'PostgreSQL' : 'Disco Servidor'}
+                {dbEngine === 'POSTGRESQL' ? 'PostgreSQL' : 'BD Interna'}
               </span>
             </div>
           ) : (
@@ -509,7 +509,7 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
                 dbEngine === 'POSTGRESQL'
                   ? 'PostgreSQL 16 Conectado y Sincronizado'
                   : isDbConnected
-                  ? 'Almacenamiento Persistente en Servidor (data/praxis_db_store.json)'
+                  ? 'Base de Datos Integrada en el Sistema (data/praxis_db_store.json) - Cero descargas'
                   : isOnline
                   ? 'Modo Local / Esperando Servidor'
                   : 'Modo Offline PWA'

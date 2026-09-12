@@ -265,7 +265,7 @@ export default function BackupPage() {
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Motor Principal</span>
+          <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Base de Datos</span>
           <div className="text-base font-extrabold text-slate-900 dark:text-white mt-1 flex items-center gap-1.5">
             {dbEngine === 'POSTGRESQL' ? (
               <>
@@ -273,12 +273,12 @@ export default function BackupPage() {
               </>
             ) : (
               <>
-                <HardDrive size={16} className="text-teal-500" /> Servidor Persistente
+                <HardDrive size={16} className="text-emerald-500" /> BD Integrada Activa
               </>
             )}
           </div>
-          <span className={`text-[10px] font-medium ${dbEngine === 'POSTGRESQL' ? 'text-emerald-600 dark:text-emerald-400' : 'text-teal-600 dark:text-teal-400'}`}>
-            {dbEngine === 'POSTGRESQL' ? 'PostgreSQL Conectado' : 'Disco Servidor (JSON) Activo'}
+          <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+            {dbEngine === 'POSTGRESQL' ? 'PostgreSQL Conectado' : 'Instalada en el Sistema (Cero Descargas)'}
           </span>
         </div>
 
@@ -398,40 +398,36 @@ export default function BackupPage() {
         <div className="p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-5 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 block">
-                ARQUITECTURA DE PRODUCCIÓN & SERVIDOR
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+                BASE DE DATOS INTEGRADA EN EL SISTEMA
               </span>
               <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                Persistencia en Servidor & PostgreSQL
+                Almacenamiento Autónomo (Sin Aplicaciones Externas)
               </h3>
             </div>
             <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border font-mono ${
               dbEngine === 'POSTGRESQL'
                 ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'
-                : 'bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-200 dark:border-teal-500/20'
+                : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'
             }`}>
-              {dbEngine === 'POSTGRESQL' ? '🟢 PostgreSQL Activo' : '🟢 Disco Servidor Activo'}
+              {dbEngine === 'POSTGRESQL' ? '🟢 PostgreSQL Activo' : '🟢 BD Interna Activa'}
             </span>
           </div>
 
           {/* Banner de estado real */}
-          <div className={`p-4 rounded-2xl border text-xs leading-relaxed space-y-1.5 ${
-            dbEngine === 'POSTGRESQL'
-              ? 'bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/40 text-emerald-900 dark:text-emerald-300'
-              : 'bg-teal-50/60 dark:bg-teal-950/30 border-teal-200 dark:border-teal-800/40 text-teal-900 dark:text-teal-300'
-          }`}>
+          <div className="p-4 rounded-2xl border text-xs leading-relaxed space-y-1.5 bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/40 text-emerald-900 dark:text-emerald-300">
             <div className="font-bold flex items-center gap-1.5">
               <Sparkles size={14} />
               <span>
                 {dbEngine === 'POSTGRESQL'
                   ? 'Base de Datos PostgreSQL Conectada'
-                  : 'Persistencia Garantizada en Servidor (data/praxis_db_store.json)'}
+                  : 'Base de Datos Instalada y Activa en el Mismo Sistema (Cero Descargas)'}
               </span>
             </div>
             <p className="text-[11px] opacity-90">
               {dbEngine === 'POSTGRESQL'
                 ? 'La plataforma está sincronizada directamente con la tabla praxis_entity_store en tu base de datos PostgreSQL 16 con copias de seguridad continuas.'
-                : 'Toda empresa, visita, prospecto y planilla creada se escribe de inmediato en el disco del servidor. No requieres una base de datos externa obligatoria. Si deseas enlazar PostgreSQL en cualquier momento, el sistema migrará tus datos existentes automáticamente.'}
+                : '¡No necesitas descargar ni configurar ninguna otra aplicación de base de datos! PRAXIS incluye su propio motor de almacenamiento persistente en el servidor. Cada empresa, visita, prospecto o planilla creada se guarda de forma permanente y segura en el disco del servidor.'}
             </p>
           </div>
 
