@@ -873,27 +873,6 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
                 </button>
               </div>
             </div>
-
-            {/* Architecture Card */}
-            <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-2.5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1">
-                  <RotateCcw size={13} /> Arquitectura LibreChat
-                </span>
-                <span className="text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                  Dual-Axis
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-300 leading-relaxed">
-                Rotación de pool horizontal ante <strong>429 / 403</strong> (cuotas) y degradación vertical ante <strong>503</strong> (gemini-2.5-flash ➔ 2.0-flash ➔ 1.5-flash ➔ 1.5-pro).
-              </p>
-              <button
-                onClick={openProfileKeysModal}
-                className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] transition-all flex items-center justify-center gap-1.5 shadow-sm"
-              >
-                <Key size={13} /> Administrar Claves en Perfil
-              </button>
-            </div>
           </div>
         </div>
       )}
