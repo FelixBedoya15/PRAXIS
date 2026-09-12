@@ -270,6 +270,18 @@ export default function ProfileModal({ isOpen, onClose, defaultTab = 'USER' }: P
           </button>
 
           <button
+            onClick={() => setActiveTab('AGENCY')}
+            className={`px-3 py-2 rounded-t-xl text-xs font-bold flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all ${
+              activeTab === 'AGENCY'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 shadow-sm'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <Building2 size={13} />
+            <span>Empresa & Logo</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('GENERAL')}
             className={`px-3 py-2 rounded-t-xl text-xs font-bold flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all ${
               activeTab === 'GENERAL'
@@ -315,18 +327,6 @@ export default function ProfileModal({ isOpen, onClose, defaultTab = 'USER' }: P
           >
             <Key size={13} className="text-amber-500" />
             <span>Claves IA (Gemini)</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('AGENCY')}
-            className={`px-3 py-2 rounded-t-xl text-xs font-bold flex items-center gap-1.5 border-b-2 whitespace-nowrap transition-all ${
-              activeTab === 'AGENCY'
-                ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 shadow-sm'
-                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            <Building2 size={13} />
-            <span>Empresa & Logo</span>
           </button>
         </div>
 
