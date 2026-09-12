@@ -32,7 +32,9 @@ import {
   Upload,
   Plus,
   Trash2,
-  History
+  History,
+  Copy,
+  Phone
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
@@ -95,11 +97,11 @@ const DEFAULT_WELCOME_MESSAGE: ChatMessage = {
 
 No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decreto 768/2022, Res. 0312/2019), sino que **puedo ejecutar acciones directas en la plataforma por ti**:
 • 🏢 **Crear y afiliar empresas** con NIT, ARL y clases de riesgo.
+• 💬 **Enviar mensajes por WhatsApp (wa.me)** directos a representantes legales o coordinadores SST.
 • 📅 **Agendar y registrar visitas técnicas SST** o auditorías Res. 0312.
 • 🩺 **Registrar accidentes laborales con FURAT**, ausentismo o enfermedad.
 • 💰 **Liquidar planillas PILA** y calcular comisiones y bolsa de retorno SST.
-• 📊 **Consultar consolidados y estadísticas** de la agencia.
-• 📎 **Analizar archivos adjuntos:** Puedes subir **PDFs (planillas, FURATs), Excel (nóminas), Word o imágenes** para extraer sus datos y procesarlos automáticamente.
+• 📎 **Analizar archivos adjuntos:** Sube PDFs, Excel, Word o imágenes para extraer sus datos automáticamente.
 
 ¿Qué tarea deseas que ejecute hoy?`,
   timestamp: 'Ahora',
@@ -164,11 +166,12 @@ function renderInlineFormatting(text: string, isAi: boolean = true) {
   return parts.length > 0 ? parts : text;
 }
 
-// Renderizador estructurado de párrafos, listas y encabezados
+// Renderizador estructurado de párrafos, listas, encabezados, citas (blockquotes) y separadores
 function FormattedMessageContent({ text, isAi }: { text: string; isAi: boolean }) {
   const lines = text.split('\n');
   const elements: React.ReactNode[] = [];
   let currentList: { type: 'bullet' | 'number'; items: string[] } | null = null;
+  let currentQuoteLines: string[] | null = null;
   let key = 0;
 
   const flushList = () => {
@@ -198,13 +201,102 @@ function FormattedMessageContent({ text, isAi }: { text: string; isAi: boolean }
     currentList = null;
   };
 
+  const flushQuote = () => {
+    if (!currentQuoteLines || currentQuoteLines.length === 0) return;
+    const rawQuoteText = currentQuoteLines.join('\n').trim();
+    const quoteLinesSnapshot = [...currentQuoteLines];
+    currentQuoteLines = null;
+
+    if (!rawQuoteText) return;
+
+    const encodedWa = encodeURIComponent(rawQuoteText);
+    const waUrl = `https://wa.me/?text=${encodedWa}`;
+
+    elements.push(
+      <div
+        key={key++}
+        className="my-3 rounded-xl border border-emerald-300/80 dark:border-emerald-600/50 bg-emerald-50/70 dark:bg-emerald-950/40 border-l-4 border-l-emerald-500 p-3.5 shadow-sm space-y-2.5"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200/70 dark:border-emerald-800/70 pb-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
+            <MessageSquare size={13} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span>Mensaje estructurado para WhatsApp</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(rawQuoteText);
+                alert('📋 Mensaje copiado al portapapeles');
+              }}
+              className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-emerald-300 dark:border-emerald-700 text-slate-700 dark:text-slate-300 text-[10px] font-bold flex items-center gap-1 transition-all shadow-xs"
+              title="Copiar texto del mensaje"
+            >
+              <Copy size={11} /> Copiar
+            </button>
+            <a
+              href={waUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold flex items-center gap-1 transition-all shadow-xs"
+              title="Abrir y enviar en WhatsApp"
+            >
+              <Send size={11} /> Enviar WhatsApp
+            </a>
+          </div>
+        </div>
+        <div className="text-xs text-slate-800 dark:text-slate-200 space-y-1.5 font-normal">
+          {quoteLinesSnapshot.map((ql, qIdx) => {
+            if (!ql.trim()) {
+              return <div key={qIdx} className="h-1.5" />;
+            }
+            return (
+              <p key={qIdx} className="leading-relaxed">
+                {renderInlineFormatting(ql, isAi)}
+              </p>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   lines.forEach((line) => {
     const trimmed = line.trim();
+
+    // Líneas separadoras horizontales (***, ---, ___)
+    if (trimmed === '***' || trimmed === '---' || trimmed === '___') {
+      flushList();
+      flushQuote();
+      elements.push(<hr key={key++} className="my-2.5 border-t border-slate-200 dark:border-slate-800" />);
+      return;
+    }
+
+    // Líneas de citas en bloque (Blockquotes: '> ')
+    if (trimmed.startsWith('>')) {
+      flushList();
+      const quoteText = trimmed.replace(/^>\s?/, '');
+      if (!currentQuoteLines) {
+        currentQuoteLines = [quoteText];
+      } else {
+        currentQuoteLines.push(quoteText);
+      }
+      return;
+    }
+
     if (!trimmed) {
       flushList();
+      if (currentQuoteLines) {
+        currentQuoteLines.push('');
+        return;
+      }
+      flushQuote();
       elements.push(<div key={key++} className="h-1.5" />);
       return;
     }
+
+    // Si ya no es cita, vaciar la cita activa
+    flushQuote();
 
     if (trimmed.startsWith('• ') || trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
       const itemContent = trimmed.replace(/^[•\-\*]\s+/, '');
@@ -259,6 +351,7 @@ function FormattedMessageContent({ text, isAi }: { text: string; isAi: boolean }
   });
 
   flushList();
+  flushQuote();
 
   return <div className="space-y-1">{elements}</div>;
 }
@@ -273,13 +366,19 @@ function WelcomeMessageCard({ onSelectPrompt }: { onSelectPrompt: (prompt: strin
       prompt: 'Crear cliente Distribuciones del Caribe SAS con NIT 901.888.777-1 en ARL Sura riesgo 3 con 18 trabajadores e IBC de 42 millones en Barranquilla',
     },
     {
+      icon: <MessageSquare size={16} className="text-emerald-600 dark:text-emerald-400" />,
+      title: 'Enviar mensajes por WhatsApp',
+      desc: 'wa.me directo a representantes con mensaje personalizado.',
+      prompt: 'Enviar mensaje de WhatsApp a Wappy S.A.S. presentando nuestra propuesta de intermediación de ARL y bolsa de retorno SST',
+    },
+    {
       icon: <HardHat size={16} className="text-amber-600 dark:text-amber-400" />,
       title: 'Agendar visitas técnicas SST',
       desc: 'Inspecciones y auditorías Res. 0312 de 2019.',
       prompt: 'Programar visita técnica de auditoría de estándares mínimos 0312 para Transportes Andinos el 22 de septiembre a las 9:00 AM',
     },
     {
-      icon: <Stethoscope size={16} className="text-emerald-600 dark:text-emerald-400" />,
+      icon: <Stethoscope size={16} className="text-rose-600 dark:text-rose-400" />,
       title: 'Registrar accidentes con FURAT',
       desc: 'Contingencias laborales, días perdidos y PVE.',
       prompt: 'Registrar accidente de trabajo con FURAT para el trabajador Carlos Gómez en Constructora Bolívar por contusión en rodilla izquierda con 4 días de incapacidad',
@@ -291,13 +390,7 @@ function WelcomeMessageCard({ onSelectPrompt }: { onSelectPrompt: (prompt: strin
       prompt: 'Liquidar planilla PILA para Logística del Norte periodo actual con nómina de 55 millones',
     },
     {
-      icon: <Layers size={16} className="text-purple-600 dark:text-purple-400" />,
-      title: 'Consultar consolidados',
-      desc: 'Estadísticas de siniestralidad, empresas y cartera.',
-      prompt: '¿Cuál es el resumen de clientes, distribución por ARL y visitas programadas en la plataforma?',
-    },
-    {
-      icon: <Paperclip size={16} className="text-rose-600 dark:text-rose-400" />,
+      icon: <Paperclip size={16} className="text-purple-600 dark:text-purple-400" />,
       title: 'Analizar archivos adjuntos',
       desc: 'Sube PDFs, Excel, Word o fotos para extracción directa.',
       prompt: 'Analizar y procesar los documentos o imágenes adjuntas según la normatividad colombiana',
@@ -786,6 +879,23 @@ export default function WappyIAPage() {
           const updated = [action.data, ...getStoredPilaRecords().filter((p) => p.id !== action.data.id)];
           saveStoredPilaRecords(updated);
           setPilaRecords(updated);
+        } else if (action.entityType === 'WHATSAPP') {
+          const newWappMsg: WhatsAppMessage = {
+            id: action.data.id || `wapp-${Date.now()}`,
+            recipientPhone: action.data.cleanPhone || '3001234567',
+            recipientName: action.data.recipientName || 'Representante',
+            companyName: action.data.companyName || 'Empresa',
+            messageType: 'CHAT_IA',
+            content: action.data.messageText || '',
+            timestamp: new Date().toISOString(),
+            status: 'ENVIADO',
+            direction: 'OUTBOUND',
+          };
+          const updated = [newWappMsg, ...getStoredWhatsAppMessages().filter((m) => m.id !== newWappMsg.id)];
+          saveStoredWhatsAppMessages(updated);
+          setMessages(updated);
+          setSendSuccess(`Mensaje WhatsApp preparado y registrado para ${newWappMsg.companyName}`);
+          setTimeout(() => setSendSuccess(null), 4000);
         }
 
         window.dispatchEvent(new Event('praxis_data_synced'));
@@ -1079,6 +1189,48 @@ export default function WappyIAPage() {
                             </div>
                           )}
 
+                          {msg.actionExecuted.entityType === 'WHATSAPP' && msg.actionExecuted.data && (
+                            <div className="space-y-2.5 bg-emerald-50/60 dark:bg-emerald-950/40 p-3 rounded-xl border border-emerald-300 dark:border-emerald-700/60">
+                              <div className="grid grid-cols-2 gap-2 text-[10px] bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                <div><span className="text-slate-400">Destinatario:</span> <strong className="text-slate-800 dark:text-slate-200 block truncate">{msg.actionExecuted.data.recipientName} ({msg.actionExecuted.data.companyName})</strong></div>
+                                <div><span className="text-slate-400">Celular WhatsApp:</span> <strong className="text-emerald-700 dark:text-emerald-400 block font-mono">+{msg.actionExecuted.data.cleanPhone}</strong></div>
+                              </div>
+
+                              <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200/80 dark:border-emerald-800/80 text-xs text-slate-800 dark:text-slate-200 relative">
+                                <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                  <MessageSquare size={12} /> Mensaje a Transmitir:
+                                </div>
+                                <p className="whitespace-pre-wrap leading-relaxed">{msg.actionExecuted.data.messageText}</p>
+                              </div>
+
+                              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-medium flex items-center gap-1">
+                                  <CheckCircle2 size={12} /> Integrado con CRM WhatsApp
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(msg.actionExecuted?.data?.messageText || '');
+                                      alert('📋 Mensaje copiado al portapapeles');
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition-all flex items-center gap-1"
+                                  >
+                                    <Copy size={12} /> Copiar
+                                  </button>
+                                  <a
+                                    href={msg.actionExecuted.data.whatsappUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm hover:shadow"
+                                  >
+                                    <Send size={12} /> Abrir y Enviar por WhatsApp
+                                  </a>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
                           {msg.actionExecuted.redirectUrl && (
                             <div className="pt-1 flex justify-end">
                               <Link
@@ -1340,6 +1492,18 @@ export default function WappyIAPage() {
                     </div>
                     <p className="text-[10px] text-slate-500 line-clamp-2">
                       "Crear cliente Distribuciones del Caribe SAS con NIT 901.888.777-1 en ARL Sura..."
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => handleSendPrompt('Enviar mensaje de WhatsApp a Wappy S.A.S. presentando nuestra propuesta de intermediación de ARL y bolsa de retorno SST')}
+                    className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
+                  >
+                    <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold text-[11px] mb-0.5">
+                      <MessageSquare size={13} /> Enviar WhatsApp Comercial (wa.me)
+                    </div>
+                    <p className="text-[10px] text-slate-500 line-clamp-2">
+                      "Enviar mensaje de WhatsApp a Wappy S.A.S. con propuesta de intermediación y retorno..."
                     </p>
                   </button>
 

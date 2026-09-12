@@ -158,6 +158,37 @@ export const PRAXIS_GEMINI_TOOLS = [
           required: ['queryType'],
         },
       },
+      {
+        name: 'enviar_whatsapp',
+        description:
+          'Prepara, redacta y dispara un mensaje de WhatsApp directo a una empresa cliente o prospecto con enlace wa.me y registro en CRM WhatsApp.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            companyNameOrId: {
+              type: 'STRING',
+              description: 'Nombre o ID de la empresa cliente o prospecto (ej: Wappy S.A.S., Constructora Bolívar, cli-001)',
+            },
+            recipientName: {
+              type: 'STRING',
+              description: 'Nombre del destinatario o cargo (ej: Representante Legal, Encargado SST)',
+            },
+            recipientPhone: {
+              type: 'STRING',
+              description: 'Número de celular o WhatsApp (opcional si la empresa ya está en el sistema)',
+            },
+            messageText: {
+              type: 'STRING',
+              description: 'Mensaje completo, estratégico y profesional para enviar por WhatsApp',
+            },
+            messageType: {
+              type: 'STRING',
+              description: 'Tipo: PROPUESTA_COMERCIAL, RECORDATORIO_PILA, VISITA_SST, NOTIFICACION_ARL o GENERAL',
+            },
+          },
+          required: ['companyNameOrId', 'messageText'],
+        },
+      },
     ],
   },
 ];
@@ -166,7 +197,7 @@ export interface ToolExecutionResult {
   success: boolean;
   action: string;
   message: string;
-  entityType?: 'CLIENT' | 'LEAD' | 'VISIT' | 'MEDICAL' | 'PILA';
+  entityType?: 'CLIENT' | 'LEAD' | 'VISIT' | 'MEDICAL' | 'PILA' | 'WHATSAPP';
   data?: any;
   redirectUrl?: string;
 }
@@ -422,6 +453,74 @@ export function executeToolCall(name: string, args: any, currentData: {
         success: true,
         action: 'consultar_plataforma',
         message: `Estado de la plataforma: ${clientsCount} empresas clientes activas (IBC total: $${totalIbc.toLocaleString('es-CO')}), ${leadsCount} prospectos comerciales en pipeline, ${visitsCount} visitas técnicas de campo SST y ${medicalCount} casos médicos/incapacidades registrados.`,
+      };
+    }
+
+    case 'enviar_whatsapp': {
+      const q = (args.companyNameOrId || '').toLowerCase().trim();
+      const foundClient = currentData.clients.find(
+        (c) =>
+          c.id.toLowerCase() === q ||
+          c.name.toLowerCase().includes(q) ||
+          c.nit.toLowerCase().includes(q)
+      );
+      const foundLead = !foundClient
+        ? currentData.leads.find(
+            (l) =>
+              l.id.toLowerCase() === q ||
+              l.name.toLowerCase().includes(q) ||
+              l.nit.toLowerCase().includes(q)
+          )
+        : null;
+
+      const companyName = foundClient?.name || foundLead?.name || args.companyNameOrId || 'Empresa';
+      const recipientName =
+        args.recipientName ||
+        foundClient?.legalRepName ||
+        foundClient?.sstResponsibleName ||
+        foundLead?.legalRepName ||
+        'Representante Legal';
+
+      const rawPhone =
+        args.recipientPhone ||
+        foundClient?.legalRepPhone ||
+        foundClient?.sstResponsiblePhone ||
+        foundLead?.legalRepPhone ||
+        '3001234567';
+
+      // Normalización del número telefónico para wa.me (formato colombiano con prefijo 57)
+      const digits = rawPhone.replace(/[^0-9]/g, '');
+      const cleanPhone = digits.startsWith('57')
+        ? digits
+        : digits.length === 10 && digits.startsWith('3')
+        ? `57${digits}`
+        : digits.length === 10
+        ? `57${digits}`
+        : digits || '573001234567';
+
+      const messageText = args.messageText || 'Cordial saludo desde PRAXIS Prevención y Seguros.';
+      const encoded = encodeURIComponent(messageText);
+      const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encoded}`;
+
+      const whatsappData = {
+        id: `wapp-${Date.now().toString().slice(-6)}`,
+        companyName,
+        recipientName,
+        recipientPhone: rawPhone,
+        cleanPhone,
+        messageText,
+        whatsappUrl,
+        messageType: args.messageType || 'CHAT_IA',
+        status: 'ENVIADO',
+        timestamp: new Date().toISOString(),
+      };
+
+      return {
+        success: true,
+        action: 'enviar_whatsapp',
+        message: `Mensaje de WhatsApp para "${companyName}" (${recipientName} - +${cleanPhone}) preparado exitosamente y listo para ser enviado con wa.me.`,
+        entityType: 'WHATSAPP',
+        data: whatsappData,
       };
     }
 
