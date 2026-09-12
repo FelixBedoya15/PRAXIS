@@ -183,8 +183,15 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
     },
     {
       href: '/medico',
-      label: 'Módulo Médico & AT',
+      label: 'Eventos & Ausentismo',
       icon: Activity,
+      roles: ['ADMIN', 'ANALISTA_FINANCIERO', 'INGENIERO_SST', 'MEDICO_LABORAL', 'ASESOR_COMERCIAL'],
+    },
+    {
+      href: '/examenes-ocupacionales',
+      label: 'Exámenes Ocupacionales',
+      icon: Stethoscope,
+      badge: 'Bolsa SST',
       roles: ['ADMIN', 'ANALISTA_FINANCIERO', 'INGENIERO_SST', 'MEDICO_LABORAL', 'ASESOR_COMERCIAL'],
     },
     {
@@ -422,6 +429,17 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
                     }
                   />
                   <span className="truncate">{item.label}</span>
+                  {(item as any).badge && (
+                    <span
+                      className={`ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider shrink-0 ${
+                        isActive
+                          ? 'bg-white/20 text-white'
+                          : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                      }`}
+                    >
+                      {(item as any).badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}

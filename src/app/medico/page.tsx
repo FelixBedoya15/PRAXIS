@@ -30,7 +30,8 @@ import {
   HardHat,
   Calculator,
   Edit2,
-  Trash2
+  Trash2,
+  ChevronRight,
 } from 'lucide-react';
 import { getStoredClients, getStoredMedicalRecords, saveStoredMedicalRecords, getStoredAgencyProfile } from '@/lib/storage';
 import { ClientCompany, MedicalRecord, AgencyProfile } from '@/types';
@@ -157,7 +158,7 @@ export default function IndicadoresSSTPage() {
   const totalAccidents = filteredRecords.filter((r) => r.incidentType === 'ACCIDENTE_TRABAJO').length;
   const totalOccupationalDiseases = filteredRecords.filter((r) => r.incidentType === 'ENFERMEDAD_LABORAL').length;
   const totalCommonAbsence = filteredRecords.filter((r) => r.incidentType === 'AUSENTISMO_COMUN').length;
-  const totalPeriodicExams = filteredRecords.filter((r) => r.incidentType === 'EXAMEN_MEDICO').length;
+  const totalIncidents = filteredRecords.filter((r) => r.incidentType === 'INCIDENTE_LABORAL').length;
 
   const totalDaysLostAT = filteredRecords
     .filter((r) => r.incidentType === 'ACCIDENTE_TRABAJO')
@@ -402,13 +403,37 @@ export default function IndicadoresSSTPage() {
             onChange={(e) => setSelectedEventTypeFilter(e.target.value)}
             className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-200 font-medium"
           >
-            <option value="TODOS">Todos los Eventos</option>
-            <option value="ACCIDENTE_TRABAJO">Accidentes de Trabajo</option>
-            <option value="AUSENTISMO_COMUN">Ausentismo Común</option>
-            <option value="ENFERMEDAD_LABORAL">Enfermedades Laborales</option>
-            <option value="EXAMEN_MEDICO">Exámenes Ocupacionales</option>
+            <option value="TODOS">Todos los Eventos Laborales</option>
+            <option value="ACCIDENTE_TRABAJO">Accidentes de Trabajo (AT)</option>
+            <option value="INCIDENTE_LABORAL">Incidentes Laborales (Casi-accidentes)</option>
+            <option value="ENFERMEDAD_LABORAL">Enfermedades Laborales (EL)</option>
+            <option value="AUSENTISMO_COMUN">Ausentismo Común (EPS)</option>
           </select>
         </div>
+      </div>
+
+      {/* Banner Informativo: Nuevo Módulo Independiente de Exámenes Ocupacionales */}
+      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-teal-500/10 border border-blue-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-sm">
+        <div className="flex items-center gap-2.5 text-blue-900 dark:text-blue-200">
+          <div className="p-2 rounded-xl bg-blue-600 text-white shrink-0 shadow-sm">
+            <Stethoscope size={16} />
+          </div>
+          <div>
+            <span className="font-bold block text-slate-900 dark:text-white">
+              ¿Buscando Exámenes Médicos Ocupacionales (Ingreso, Periódico, Retiro, Alturas)?
+            </span>
+            <span className="text-[11px] text-slate-600 dark:text-slate-400">
+              Ahora cuentan con un módulo independiente financiado al 100% por la <strong>Bolsa de Reinversión SST</strong> de comisiones ARL ($0 COP de desembolso para el cliente).
+            </span>
+          </div>
+        </div>
+        <Link
+          href={`/examenes-ocupacionales${selectedCompanyFilter !== 'TODAS' ? `?cliente=${selectedCompanyFilter}` : ''}`}
+          className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-sm flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
+        >
+          <span>Ir a Exámenes Ocupacionales</span>
+          <ChevronRight size={14} />
+        </Link>
       </div>
 
       {/* Active Company Filter Banner for Cross-Module Connectivity */}
@@ -602,18 +627,18 @@ export default function IndicadoresSSTPage() {
               </div>
             </div>
 
-            {/* Ausentismo Común */}
+            {/* Incidentes Laborales */}
             <div>
               <div className="flex justify-between font-medium mb-1">
-                <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Ausentismo Médico Común
+                <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400" /> Incidentes Laborales (Casi-AT)
                 </span>
-                <strong className="font-mono">{totalCommonAbsence} ({filteredRecords.length > 0 ? Math.round((totalCommonAbsence / filteredRecords.length) * 100) : 0}%)</strong>
+                <strong className="font-mono">{totalIncidents} ({filteredRecords.length > 0 ? Math.round((totalIncidents / filteredRecords.length) * 100) : 0}%)</strong>
               </div>
               <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-amber-500 rounded-full transition-all"
-                  style={{ width: `${filteredRecords.length > 0 ? (totalCommonAbsence / filteredRecords.length) * 100 : 0}%` }}
+                  className="h-full bg-amber-400 rounded-full transition-all"
+                  style={{ width: `${filteredRecords.length > 0 ? (totalIncidents / filteredRecords.length) * 100 : 0}%` }}
                 />
               </div>
             </div>
@@ -634,18 +659,18 @@ export default function IndicadoresSSTPage() {
               </div>
             </div>
 
-            {/* Exámenes Ocupacionales */}
+            {/* Ausentismo Común */}
             <div>
               <div className="flex justify-between font-medium mb-1">
-                <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Exámenes Periódicos
+                <span className="flex items-center gap-1.5 text-blue-700 dark:text-blue-400">
+                  <span className="h-2.5 w-2.5 rounded-full bg-blue-500" /> Ausentismo Médico Común (EPS)
                 </span>
-                <strong className="font-mono">{totalPeriodicExams} ({filteredRecords.length > 0 ? Math.round((totalPeriodicExams / filteredRecords.length) * 100) : 0}%)</strong>
+                <strong className="font-mono">{totalCommonAbsence} ({filteredRecords.length > 0 ? Math.round((totalCommonAbsence / filteredRecords.length) * 100) : 0}%)</strong>
               </div>
               <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-emerald-500 rounded-full transition-all"
-                  style={{ width: `${filteredRecords.length > 0 ? (totalPeriodicExams / filteredRecords.length) * 100 : 0}%` }}
+                  className="h-full bg-blue-500 rounded-full transition-all"
+                  style={{ width: `${filteredRecords.length > 0 ? (totalCommonAbsence / filteredRecords.length) * 100 : 0}%` }}
                 />
               </div>
             </div>
@@ -760,14 +785,20 @@ export default function IndicadoresSSTPage() {
                     className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[9px] font-bold shrink-0 ${
                       r.incidentType === 'ACCIDENTE_TRABAJO'
                         ? 'bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
+                        : r.incidentType === 'INCIDENTE_LABORAL'
+                        ? 'bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
                         : r.incidentType === 'ENFERMEDAD_LABORAL'
                         ? 'bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800'
-                        : r.incidentType === 'AUSENTISMO_COMUN'
-                        ? 'bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
-                        : 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                        : 'bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
                     }`}
                   >
-                    {r.incidentType.replace('_', ' ')}
+                    {r.incidentType === 'ACCIDENTE_TRABAJO'
+                      ? 'Accidente (AT)'
+                      : r.incidentType === 'INCIDENTE_LABORAL'
+                      ? 'Incidente (Casi-AT)'
+                      : r.incidentType === 'ENFERMEDAD_LABORAL'
+                      ? 'Enf. Laboral (EL)'
+                      : 'Ausentismo Común'}
                   </span>
                 </div>
 
@@ -780,7 +811,7 @@ export default function IndicadoresSSTPage() {
                   </div>
                   <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-200 dark:border-slate-800/60">
                     <span>Incapacidad: <strong className="text-slate-800 dark:text-slate-200">{r.daysLost} días</strong></span>
-                    <span>FURAT: <strong className="font-mono text-slate-700 dark:text-slate-300">{r.furatFurepCode || 'N/A'}</strong></span>
+                    <span>Radicado: <strong className="font-mono text-slate-700 dark:text-slate-300">{r.furatFurepCode || 'N/A'}</strong></span>
                   </div>
                 </div>
 
@@ -833,14 +864,20 @@ export default function IndicadoresSSTPage() {
                       className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold ${
                         r.incidentType === 'ACCIDENTE_TRABAJO'
                           ? 'bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
+                          : r.incidentType === 'INCIDENTE_LABORAL'
+                          ? 'bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
                           : r.incidentType === 'ENFERMEDAD_LABORAL'
                           ? 'bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800'
-                          : r.incidentType === 'AUSENTISMO_COMUN'
-                          ? 'bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
-                          : 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                          : 'bg-blue-50 dark:bg-blue-950/80 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
                       }`}
                     >
-                      {r.incidentType.replace('_', ' ')}
+                      {r.incidentType === 'ACCIDENTE_TRABAJO'
+                        ? 'Accidente de Trabajo (AT)'
+                        : r.incidentType === 'INCIDENTE_LABORAL'
+                        ? 'Incidente Laboral (Casi-AT)'
+                        : r.incidentType === 'ENFERMEDAD_LABORAL'
+                        ? 'Enfermedad Laboral (EL)'
+                        : 'Ausentismo Común (EPS)'}
                     </span>
                   </td>
                   <td className="py-3 px-4">
@@ -924,12 +961,20 @@ export default function IndicadoresSSTPage() {
                   className={`px-2.5 py-1 rounded-xl text-xs font-bold font-mono print:border print:border-slate-400 ${
                     viewingRecord.incidentType === 'ACCIDENTE_TRABAJO'
                       ? 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-400 border border-rose-300'
+                      : viewingRecord.incidentType === 'INCIDENTE_LABORAL'
+                      ? 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-300'
                       : viewingRecord.incidentType === 'ENFERMEDAD_LABORAL'
                       ? 'bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-400 border border-purple-300'
-                      : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-300'
+                      : 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400 border border-blue-300'
                   }`}
                 >
-                  {viewingRecord.incidentType.replace('_', ' ')}
+                  {viewingRecord.incidentType === 'ACCIDENTE_TRABAJO'
+                    ? 'ACCIDENTE DE TRABAJO (AT)'
+                    : viewingRecord.incidentType === 'INCIDENTE_LABORAL'
+                    ? 'INCIDENTE LABORAL (CASI-AT)'
+                    : viewingRecord.incidentType === 'ENFERMEDAD_LABORAL'
+                    ? 'ENFERMEDAD LABORAL (EL)'
+                    : 'AUSENTISMO COMÚN (EPS)'}
                 </span>
               </div>
             </div>
@@ -1139,13 +1184,20 @@ export default function IndicadoresSSTPage() {
                   <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">Tipo de Novedad</label>
                   <select
                     value={newIncidentType}
-                    onChange={(e) => setNewIncidentType(e.target.value as MedicalRecord['incidentType'])}
+                    onChange={(e) => {
+                      const val = e.target.value as MedicalRecord['incidentType'];
+                      setNewIncidentType(val);
+                      if (val === 'INCIDENTE_LABORAL') {
+                        setNewDaysLost(0);
+                        setNewFuratFurepCode(`INC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
+                      }
+                    }}
                     className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 font-bold"
                   >
-                    <option value="ACCIDENTE_TRABAJO">Accidente de Trabajo (AT)</option>
-                    <option value="AUSENTISMO_COMUN">Ausentismo Común (Enfermedad General)</option>
-                    <option value="ENFERMEDAD_LABORAL">Enfermedad Laboral (EL)</option>
-                    <option value="EXAMEN_MEDICO">Examen Periódico Ocupacional</option>
+                    <option value="ACCIDENTE_TRABAJO">Accidente de Trabajo (AT - Radicado FURAT)</option>
+                    <option value="INCIDENTE_LABORAL">Incidente Laboral (Casi-accidente sin lesión - Res. 1401)</option>
+                    <option value="ENFERMEDAD_LABORAL">Enfermedad Laboral (EL - Calificación FUREL)</option>
+                    <option value="AUSENTISMO_COMUN">Ausentismo Común (Incapacidad Médica EPS)</option>
                   </select>
                 </div>
 
@@ -1326,10 +1378,10 @@ export default function IndicadoresSSTPage() {
                     onChange={(e) => setEditIncidentType(e.target.value as MedicalRecord['incidentType'])}
                     className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 font-bold"
                   >
-                    <option value="ACCIDENTE_TRABAJO">Accidente de Trabajo (AT)</option>
-                    <option value="AUSENTISMO_COMUN">Ausentismo Común (Enfermedad General)</option>
-                    <option value="ENFERMEDAD_LABORAL">Enfermedad Laboral (EL)</option>
-                    <option value="EXAMEN_MEDICO">Examen Periódico Ocupacional</option>
+                    <option value="ACCIDENTE_TRABAJO">Accidente de Trabajo (AT - Radicado FURAT)</option>
+                    <option value="INCIDENTE_LABORAL">Incidente Laboral (Casi-accidente sin lesión - Res. 1401)</option>
+                    <option value="ENFERMEDAD_LABORAL">Enfermedad Laboral (EL - Calificación FUREL)</option>
+                    <option value="AUSENTISMO_COMUN">Ausentismo Común (Incapacidad Médica EPS)</option>
                   </select>
                 </div>
 

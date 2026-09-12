@@ -53,6 +53,7 @@ import {
   getStoredLeads,
   getStoredAgencyProfile,
   getStoredMedicalRecords,
+  getStoredOccupationalExams,
 } from '@/lib/storage';
 import {
   ARLCompany,
@@ -64,6 +65,7 @@ import {
   RiskClass,
   AgencyProfile,
   MedicalRecord,
+  OccupationalExam,
 } from '@/types';
 import { calculateCompanyFinancials } from '@/lib/calculations';
 
@@ -82,6 +84,7 @@ export default function DashboardPage() {
   const [pilaRecords, setPilaRecords] = useState<PilaRecord[]>([]);
   const [fieldVisits, setFieldVisits] = useState<FieldVisit[]>([]);
   const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
+  const [occupationalExams, setOccupationalExams] = useState<OccupationalExam[]>([]);
   const [agencyProfile, setAgencyProfile] = useState<AgencyProfile | null>(null);
   const [isMounted, setIsMounted] = useState(false);
 
@@ -93,6 +96,7 @@ export default function DashboardPage() {
     setPilaRecords(getStoredPilaRecords());
     setFieldVisits(getStoredFieldVisits());
     setMedicalRecords(getStoredMedicalRecords());
+    setOccupationalExams(getStoredOccupationalExams());
     setAgencyProfile(getStoredAgencyProfile());
 
     const handleProfileUpdated = () => {
@@ -245,7 +249,12 @@ export default function DashboardPage() {
   // Health & Accident Metrics (Resolución 0312 de 2019 / Medicina Laboral)
   const totalDaysLost = medicalRecords.reduce((sum, m) => sum + (m.daysLost || 0), 0);
   const accidentesCount = medicalRecords.filter((m) => m.incidentType === 'ACCIDENTE_TRABAJO').length;
-  const examenesCount = medicalRecords.filter((m) => m.incidentType === 'EXAMEN_MEDICO').length;
+  const incidentesCount = medicalRecords.filter((m) => m.incidentType === 'INCIDENTE_LABORAL').length;
+
+  // Bolsa de Reinversión SST
+  const totalReturnBolsa = pilaRecords.reduce((s, p) => s + (p.clientReturnAmount || 0), 0);
+  const totalExamsCovered = occupationalExams.reduce((s, e) => s + (e.totalCost || 0), 0);
+  const totalBolsaDisponible = totalReturnBolsa - totalExamsCovered;
   
   // IFAT (Índice de Frecuencia AT - Res. 0312 de 2019): (No. AT / Total Trabajadores) * 100
   const totalWorkers = clients.reduce((s, c) => s + (c.employeeCount || 0), 0) || 1;
@@ -698,14 +707,14 @@ export default function DashboardPage() {
                 <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">Radicados ante ARL</span>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 space-y-1">
-                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase block tracking-wider">
-                  Exámenes Ocup.
+              <div className="p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 space-y-1">
+                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase block tracking-wider">
+                  Incidentes (Casi-AT)
                 </span>
-                <div className="text-base sm:text-xl font-black text-blue-700 dark:text-blue-300 font-mono">
-                  {examenesCount} <span className="text-xs font-normal">reg.</span>
+                <div className="text-base sm:text-xl font-black text-indigo-700 dark:text-indigo-300 font-mono">
+                  {incidentesCount} <span className="text-xs font-normal">casos</span>
                 </div>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">Ingreso / Egreso / Per.</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">Near-miss sin lesiones</span>
               </div>
 
               <div className="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 space-y-1">
@@ -717,6 +726,28 @@ export default function DashboardPage() {
                 </div>
                 <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">Índice Res. 0312</span>
               </div>
+            </div>
+
+            {/* Direct Shortcut to Exámenes Ocupacionales & Bolsa de Reinversión */}
+            <div className="p-3 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs">
+              <div className="flex items-center gap-2">
+                <Stethoscope size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <div>
+                  <span className="font-bold text-slate-900 dark:text-white block">
+                    Bolsa de Reinversión SST: <strong className="font-mono text-emerald-600 dark:text-emerald-400">{formatCOP(Math.max(0, totalBolsaDisponible))}</strong> disponible
+                  </span>
+                  <span className="text-[10px] text-slate-500 block">
+                    {occupationalExams.length} exámenes ocupacionales ejecutados con cargo al retorno ($0 COP costo cliente).
+                  </span>
+                </div>
+              </div>
+              <Link
+                href="/examenes-ocupacionales"
+                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] transition-all flex items-center gap-1 shrink-0 self-start sm:self-auto shadow-sm"
+              >
+                <span>Módulo Exámenes</span>
+                <ChevronRight size={13} />
+              </Link>
             </div>
           </div>
         </div>

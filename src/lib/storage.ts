@@ -1,5 +1,5 @@
-import { ARLCompany, ClientCompany, PilaRecord, FieldVisit, MedicalRecord, RUIIntermediaryProfile, WhatsAppMessage, UserProfile, AgencyProfile, LeadProspect } from '../types';
-import { INITIAL_ARLS, INITIAL_CLIENTS, INITIAL_PILA_RECORDS, INITIAL_FIELD_VISITS, INITIAL_MEDICAL_RECORDS, INITIAL_RUI_PROFILE, INITIAL_WHATSAPP_MESSAGES, INITIAL_AGENCY_PROFILE, INITIAL_USER_PROFILES, INITIAL_LEADS } from './data';
+import { ARLCompany, ClientCompany, PilaRecord, FieldVisit, MedicalRecord, RUIIntermediaryProfile, WhatsAppMessage, UserProfile, AgencyProfile, LeadProspect, OccupationalExam } from '../types';
+import { INITIAL_ARLS, INITIAL_CLIENTS, INITIAL_PILA_RECORDS, INITIAL_FIELD_VISITS, INITIAL_MEDICAL_RECORDS, INITIAL_RUI_PROFILE, INITIAL_WHATSAPP_MESSAGES, INITIAL_AGENCY_PROFILE, INITIAL_USER_PROFILES, INITIAL_LEADS, INITIAL_OCCUPATIONAL_EXAMS } from './data';
 
 export const STORAGE_KEYS = {
   ARLS: 'wappy_arl_companies_v3',
@@ -7,6 +7,7 @@ export const STORAGE_KEYS = {
   PILA_RECORDS: 'wappy_pila_records_v3',
   FIELD_VISITS: 'wappy_field_visits_v4',
   MEDICAL_RECORDS: 'wappy_medical_records_v2',
+  OCCUPATIONAL_EXAMS: 'praxis_occupational_exams_v1',
   RUI_PROFILE: 'wappy_rui_profile_v2',
   WHATSAPP_MESSAGES: 'wappy_whatsapp_messages_v2',
   CURRENT_ROLE: 'wappy_current_role_v1',
@@ -71,6 +72,7 @@ export async function syncFromServer(): Promise<{ connected: boolean; synced: bo
         [STORAGE_KEYS.PILA_RECORDS]: getStoredPilaRecords(),
         [STORAGE_KEYS.FIELD_VISITS]: getStoredFieldVisits(),
         [STORAGE_KEYS.MEDICAL_RECORDS]: getStoredMedicalRecords(),
+        [STORAGE_KEYS.OCCUPATIONAL_EXAMS]: getStoredOccupationalExams(),
         [STORAGE_KEYS.RUI_PROFILE]: getStoredRUIProfile(),
         [STORAGE_KEYS.WHATSAPP_MESSAGES]: getStoredWhatsAppMessages(),
         [STORAGE_KEYS.AGENCY_PROFILE]: getStoredAgencyProfile(),
@@ -119,6 +121,7 @@ export async function resetToDefaultSeedData() {
   localStorage.setItem(STORAGE_KEYS.PILA_RECORDS, JSON.stringify(INITIAL_PILA_RECORDS));
   localStorage.setItem(STORAGE_KEYS.FIELD_VISITS, JSON.stringify(INITIAL_FIELD_VISITS));
   localStorage.setItem(STORAGE_KEYS.MEDICAL_RECORDS, JSON.stringify(INITIAL_MEDICAL_RECORDS));
+  localStorage.setItem(STORAGE_KEYS.OCCUPATIONAL_EXAMS, JSON.stringify(INITIAL_OCCUPATIONAL_EXAMS));
   localStorage.setItem(STORAGE_KEYS.WHATSAPP_MESSAGES, JSON.stringify(INITIAL_WHATSAPP_MESSAGES));
 
   const initialBatch = {
@@ -128,6 +131,7 @@ export async function resetToDefaultSeedData() {
     [STORAGE_KEYS.PILA_RECORDS]: INITIAL_PILA_RECORDS,
     [STORAGE_KEYS.FIELD_VISITS]: INITIAL_FIELD_VISITS,
     [STORAGE_KEYS.MEDICAL_RECORDS]: INITIAL_MEDICAL_RECORDS,
+    [STORAGE_KEYS.OCCUPATIONAL_EXAMS]: INITIAL_OCCUPATIONAL_EXAMS,
     [STORAGE_KEYS.WHATSAPP_MESSAGES]: INITIAL_WHATSAPP_MESSAGES,
   };
   await fetch('/api/data', {
@@ -272,6 +276,33 @@ export const saveStoredMedicalRecords = (records: MedicalRecord[]) => {
   if (typeof window !== 'undefined') {
     localStorage.setItem(STORAGE_KEYS.MEDICAL_RECORDS, JSON.stringify(records));
     pushToServer(STORAGE_KEYS.MEDICAL_RECORDS, records);
+  }
+};
+
+export const getStoredOccupationalExams = (): OccupationalExam[] => {
+  if (typeof window === 'undefined') return INITIAL_OCCUPATIONAL_EXAMS;
+  cleanupLegacyStorage();
+  const stored = localStorage.getItem(STORAGE_KEYS.OCCUPATIONAL_EXAMS);
+  if (!stored) {
+    localStorage.setItem(STORAGE_KEYS.OCCUPATIONAL_EXAMS, JSON.stringify(INITIAL_OCCUPATIONAL_EXAMS));
+    return INITIAL_OCCUPATIONAL_EXAMS;
+  }
+  try {
+    const list: OccupationalExam[] = JSON.parse(stored);
+    if (!Array.isArray(list) || list.length === 0) {
+      localStorage.setItem(STORAGE_KEYS.OCCUPATIONAL_EXAMS, JSON.stringify(INITIAL_OCCUPATIONAL_EXAMS));
+      return INITIAL_OCCUPATIONAL_EXAMS;
+    }
+    return list;
+  } catch (e) {
+    return INITIAL_OCCUPATIONAL_EXAMS;
+  }
+};
+
+export const saveStoredOccupationalExams = (exams: OccupationalExam[]) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEYS.OCCUPATIONAL_EXAMS, JSON.stringify(exams));
+    pushToServer(STORAGE_KEYS.OCCUPATIONAL_EXAMS, exams);
   }
 };
 

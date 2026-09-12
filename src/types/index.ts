@@ -208,7 +208,7 @@ export interface MedicalRecord {
   id: string;
   clientId: string;
   clientName: string;
-  incidentType: 'ACCIDENTE_TRABAJO' | 'ENFERMEDAD_LABORAL' | 'AUSENTISMO_COMUN' | 'EXAMEN_MEDICO';
+  incidentType: 'ACCIDENTE_TRABAJO' | 'INCIDENTE_LABORAL' | 'ENFERMEDAD_LABORAL' | 'AUSENTISMO_COMUN';
   employeeDocument: string;
   employeeName: string;
   employeeRole: string;
@@ -221,6 +221,54 @@ export interface MedicalRecord {
   confidentialFlag: boolean;
   date: string;
   createdByDoctor: string;
+}
+
+export type OccupationalExamType = 
+  | 'INGRESO' 
+  | 'PERIODICO' 
+  | 'RETIRO' 
+  | 'POST_INCAPACIDAD' 
+  | 'CAMBIO_OCUPACION';
+
+export type AptitudeStatus = 
+  | 'APTO' 
+  | 'APTO_CON_RESTRICCIONES' 
+  | 'NO_APTO' 
+  | 'APLAZADO';
+
+export interface ExamCatalogItem {
+  id: string;
+  name: string;
+  shortName: string;
+  category: 'MEDICO_GENERAL' | 'AUDICION' | 'VISION' | 'PULMONAR' | 'CARDIOVASCULAR' | 'LABORATORIO' | 'ESPECIALIZADO';
+  normativeBase: string; // Ej: 'Resolución 2346 de 2007', 'Resolución 1843 de 1991', 'Resolución 4272 de 2021'
+  targetActivities: string[]; // Ej: ['Metalmecánica', 'Construcción', 'Alturas']
+  estimatedCost: number; // Costo referencial en COP
+  description: string;
+}
+
+export interface OccupationalExam {
+  id: string;
+  clientId: string;
+  clientName: string;
+  employeeDocument: string;
+  employeeName: string;
+  employeeRole: string;
+  workCenter?: string;
+  examType: OccupationalExamType;
+  testsIncluded: string[]; // IDs de pruebas del catálogo
+  totalCost: number; // Monto cubierto con la Bolsa de Reinversión (COP)
+  coveredByReinvestment: boolean; // true = 100% cubierto por retorno ARL ($0 de bolsillo)
+  aptitudeStatus: AptitudeStatus;
+  restrictions?: string;
+  recommendations?: string;
+  specializedEmphasis?: string; // Ej: 'Trabajo Seguro en Alturas (Res. 4272/2021)'
+  doctorName: string;
+  doctorLicense: string;
+  date: string;
+  certificateCode: string;
+  expiresAt?: string;
+  clinicalNotes?: string;
 }
 
 export interface RUIIntermediaryProfile {

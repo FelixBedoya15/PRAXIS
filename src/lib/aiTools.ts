@@ -13,6 +13,7 @@ import {
   RiskClass,
   CommissionConcept,
   WorkCenter,
+  OccupationalExam,
 } from '@/types';
 
 export const PRAXIS_GEMINI_TOOLS = [
@@ -109,7 +110,7 @@ export const PRAXIS_GEMINI_TOOLS = [
             companyNameOrId: { type: 'STRING', description: 'Nombre o ID de la empresa' },
             incidentType: {
               type: 'STRING',
-              description: 'Tipo de evento: ACCIDENTE_TRABAJO, AUSENTISMO_COMUN, ENFERMEDAD_LABORAL o EXAMEN_MEDICO',
+              description: 'Tipo de evento: ACCIDENTE_TRABAJO, INCIDENTE_LABORAL, ENFERMEDAD_LABORAL o AUSENTISMO_COMUN',
             },
             employeeName: { type: 'STRING', description: 'Nombre completo del trabajador accidentado o incapacitado' },
             employeeDocument: { type: 'STRING', description: 'Cédula de ciudadanía o documento' },
@@ -189,6 +190,35 @@ export const PRAXIS_GEMINI_TOOLS = [
           required: ['companyNameOrId', 'messageText'],
         },
       },
+      {
+        name: 'registrar_examen_ocupacional',
+        description:
+          'Registra un examen médico ocupacional (Ingreso, Periódico, Retiro, Alturas, etc.) financiado con la Bolsa de Reinversión SST de la empresa.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            companyNameOrId: { type: 'STRING', description: 'Nombre o ID de la empresa' },
+            employeeName: { type: 'STRING', description: 'Nombre completo del trabajador evaluado' },
+            employeeDocument: { type: 'STRING', description: 'Cédula de ciudadanía o documento del trabajador' },
+            employeeRole: { type: 'STRING', description: 'Cargo u ocupación del trabajador' },
+            examType: {
+              type: 'STRING',
+              description: 'Tipo de examen: INGRESO, PERIODICO, RETIRO, POST_INCAPACIDAD o CAMBIO_OCUPACION',
+            },
+            specializedEmphasis: {
+              type: 'STRING',
+              description: 'Énfasis: Alturas Res. 4272, Alimentos Res. 2674, Espacios Confinados, PESV o General',
+            },
+            aptitudeStatus: {
+              type: 'STRING',
+              description: 'Concepto de aptitud: APTO, APTO_CON_RESTRICCIONES, NO_APTO o APLAZADO',
+            },
+            restrictions: { type: 'STRING', description: 'Restricciones laborales si aplica' },
+            recommendations: { type: 'STRING', description: 'Recomendaciones médicas y de medicina preventiva' },
+          },
+          required: ['companyNameOrId', 'employeeName', 'employeeRole', 'examType', 'aptitudeStatus'],
+        },
+      },
     ],
   },
 ];
@@ -197,7 +227,7 @@ export interface ToolExecutionResult {
   success: boolean;
   action: string;
   message: string;
-  entityType?: 'CLIENT' | 'LEAD' | 'VISIT' | 'MEDICAL' | 'PILA' | 'WHATSAPP';
+  entityType?: 'CLIENT' | 'LEAD' | 'VISIT' | 'MEDICAL' | 'OCCUPATIONAL_EXAM' | 'PILA' | 'WHATSAPP';
   data?: any;
   redirectUrl?: string;
 }
@@ -521,6 +551,47 @@ export function executeToolCall(name: string, args: any, currentData: {
         message: `Mensaje de WhatsApp para "${companyName}" (${recipientName} - +${cleanPhone}) preparado exitosamente y listo para ser enviado con wa.me.`,
         entityType: 'WHATSAPP',
         data: whatsappData,
+      };
+    }
+
+    case 'registrar_examen_ocupacional': {
+      const query = (args.companyNameOrId || '').toLowerCase();
+      const client = currentData.clients.find(
+        (c) => c.id.toLowerCase() === query || c.name.toLowerCase().includes(query) || c.nit.includes(query)
+      );
+
+      const targetClientId = client ? client.id : currentData.clients[0]?.id || 'cli-001';
+      const targetClientName = client ? client.name : args.companyNameOrId;
+
+      const newExam: OccupationalExam = {
+        id: `exam-${Date.now().toString().slice(-4)}`,
+        clientId: targetClientId,
+        clientName: targetClientName,
+        employeeDocument: args.employeeDocument || 'CC Sin especificar',
+        employeeName: args.employeeName,
+        employeeRole: args.employeeRole || 'Operario',
+        examType: args.examType || 'PERIODICO',
+        testsIncluded: ['EXAM_CLINICO', 'VISIOMETRIA', 'AUDIOMETRIA'],
+        totalCost: 91000,
+        coveredByReinvestment: true,
+        aptitudeStatus: args.aptitudeStatus || 'APTO',
+        restrictions: args.restrictions || 'Ninguna.',
+        recommendations: args.recommendations || 'Pausas activas y uso continuo de EPP.',
+        specializedEmphasis: args.specializedEmphasis || 'Medicina Preventiva General',
+        doctorName: 'Dra. Marcela Salazar Botero',
+        doctorLicense: 'Licencia SST Res. 4192 / Reg. Médico 8841',
+        date: todayStr,
+        certificateCode: `CERT-${now.getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        expiresAt: new Date(now.setFullYear(now.getFullYear() + 1)).toISOString().split('T')[0],
+      };
+
+      return {
+        success: true,
+        action: 'registrar_examen_ocupacional',
+        message: `Examen ocupacional de ${newExam.examType} para ${newExam.employeeName} registrado exitosamente en "${targetClientName}". Cubierto 100% por Bolsa de Reinversión SST ($0 COP desembolso para la empresa).`,
+        entityType: 'OCCUPATIONAL_EXAM',
+        data: newExam,
+        redirectUrl: `/examenes-ocupacionales?cliente=${targetClientId}`,
       };
     }
 

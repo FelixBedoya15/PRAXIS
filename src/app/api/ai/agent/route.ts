@@ -235,6 +235,23 @@ function processFallbackIntent(prompt: string, currentContext: any): ToolExecuti
     });
   }
 
+  if (lower.includes('examen') || lower.includes('ocupacional') || lower.includes('ingreso') || lower.includes('aptitud') || lower.includes('visiometria') || lower.includes('audiometria')) {
+    return executeToolCall('registrar_examen_ocupacional', {
+      companyNameOrId: currentContext.clients?.[0]?.name || 'Empresa Afiliada',
+      employeeName: 'Trabajador Evaluado',
+      employeeRole: 'Operario General',
+      examType: 'PERIODICO',
+      specializedEmphasis: 'Medicina Preventiva y Ocupacional',
+      aptitudeStatus: 'APTO',
+    }, {
+      clients: currentContext.clients || [],
+      leads: currentContext.leads || [],
+      visits: currentContext.visits || [],
+      medicalRecords: currentContext.medicalRecords || [],
+      pilaRecords: currentContext.pilaRecords || [],
+    });
+  }
+
   if (lower.includes('resumen') || lower.includes('cartera') || lower.includes('estado')) {
     return executeToolCall('consultar_plataforma', { queryType: 'RESUMEN_CARTERA' }, {
       clients: currentContext.clients || [],
