@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { prompt, history = [], customKeys, currentContext = {}, preferredModel } = body;
+    const { prompt, history = [], customKeys, currentContext = {}, preferredModel, attachments = [] } = body;
 
     if (!prompt || typeof prompt !== 'string') {
       return NextResponse.json({ error: 'Se requiere el parámetro "prompt".' }, { status: 400 });
@@ -29,11 +29,14 @@ Tu misión no es solo responder preguntas normativas, sino EJECUTAR TAREAS DIREC
 5. 'liquidar_planilla_pila': Para conciliar pagos PILA y calcular bolsa de retorno SST y retención 10%.
 6. 'consultar_plataforma': Para extraer consolidados o estadísticas generales.
 
+DOCUMENTOS Y ARCHIVOS ADJUNTOS:
+El usuario puede adjuntar imágenes, archivos PDF (planillas, radicados FURAT, RUTs), hojas de Excel (censos de empleados, nóminas) o documentos de Word. Analiza exhaustivamente los datos contenidos en estos archivos para extraer NITs, nombres de trabajadores, diagnósticos, días de incapacidad o montos de nómina para ejecutar las herramientas de la plataforma.
+
 EMPRESAS ACTIVAS REGISTRADAS EN EL SISTEMA:
 ${clientsList || 'No hay empresas registradas aún.'}
 
 REGLAS DE OPERACIÓN:
-- Cuando el usuario te pida explícitamente o implícitamente crear, registrar, programar o liquidar algo, INVOCA INMEDIATAMENTE la herramienta correspondiente con parámetros coherentes con la normatividad colombiana.
+- Cuando el usuario te pida explícitamente o implícitamente crear, registrar, programar o liquidar algo (o te adjunte un archivo para procesarlo), INVOCA INMEDIATAMENTE la herramienta correspondiente con parámetros coherentes con la normatividad colombiana.
 - Sé conciso, ejecutivo, seguro y profesional.
 - Cita normas colombianas cuando aplique (Resolución 0312 de 2019, Decreto 768 de 2022, Sentencia C-049 de 2022 de la Corte Constitucional sobre comisiones de ARL, Estatuto Tributario Art. 476).`;
 
@@ -54,10 +57,30 @@ REGLAS DE OPERACIÓN:
       });
     }
 
-    // Agregar mensaje actual del usuario
+    // Construir partes del mensaje actual del usuario (Texto + Archivos Multimodales)
+    const userParts: any[] = [{ text: prompt }];
+
+    if (Array.isArray(attachments) && attachments.length > 0) {
+      attachments.forEach((att: any) => {
+        if (att.base64 && (att.type?.startsWith('image/') || att.type === 'application/pdf')) {
+          const cleanBase64 = att.base64.replace(/^data:[^;]+;base64,/, '');
+          userParts.push({
+            inlineData: {
+              mimeType: att.type,
+              data: cleanBase64,
+            },
+          });
+        } else if (att.textContent) {
+          userParts.push({
+            text: `\n[Archivo Adjunto "${att.name}" (${att.type || 'Documento'})]:\n${att.textContent}\n`,
+          });
+        }
+      });
+    }
+
     contents.push({
       role: 'user',
-      parts: [{ text: prompt }],
+      parts: userParts,
     });
 
     try {

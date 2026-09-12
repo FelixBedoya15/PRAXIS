@@ -24,8 +24,14 @@ import {
   FileSpreadsheet,
   Layers,
   HelpCircle,
-  AlertCircle
+  AlertCircle,
+  Paperclip,
+  FileText,
+  Image as ImageIcon,
+  X,
+  Upload
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import {
   getStoredClients,
   saveStoredClients,
@@ -54,6 +60,16 @@ import {
 import { ToolExecutionResult } from '@/lib/aiTools';
 import { extractKeyPool, LIBRECHAT_WAPPY_MODELS } from '@/lib/geminiRotator';
 
+export interface AttachedFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  base64?: string;
+  previewUrl?: string;
+  textContent?: string;
+}
+
 interface ChatMessage {
   id: string;
   sender: 'USER' | 'AI';
@@ -63,6 +79,7 @@ interface ChatMessage {
   modelUsed?: string;
   rotationsPerformed?: number;
   isFallback?: boolean;
+  attachments?: AttachedFile[];
 }
 
 export default function WappyIAPage() {
@@ -74,8 +91,13 @@ export default function WappyIAPage() {
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [geminiKeys, setGeminiKeys] = useState<string>('');
   const [keyPool, setKeyPool] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>('gemini-3.7-flash');
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-3.5-flash-lite');
   const [activeTab, setActiveTab] = useState<'ASSISTANT' | 'WHATSAPP'>('ASSISTANT');
+
+  // File Attachments State (LibreChat Style)
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // AI Assistant Chat State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -90,6 +112,7 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
 • 🩺 **Registrar accidentes laborales con FURAT**, ausentismo o enfermedad.
 • 💰 **Liquidar planillas PILA** y calcular comisiones y bolsa de retorno SST.
 • 📊 **Consultar consolidados y estadísticas** de la agencia.
+• 📎 **Analizar archivos adjuntos:** Puedes subir **PDFs (planillas, FURATs), Excel (nóminas), Word o imágenes** para extraer sus datos y procesarlos automáticamente.
 
 ¿Qué tarea deseas que ejecute hoy?`,
       timestamp: 'Ahora',
@@ -98,6 +121,119 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
   const [inputPrompt, setInputPrompt] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // File reading helper functions
+  const readFileAsDataURL = (file: File): Promise<string> =>
+    new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload = () => res(reader.result as string);
+      reader.onerror = rej;
+      reader.readAsDataURL(file);
+    });
+
+  const readFileAsArrayBuffer = (file: File): Promise<ArrayBuffer> =>
+    new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload = () => res(reader.result as ArrayBuffer);
+      reader.onerror = rej;
+      reader.readAsArrayBuffer(file);
+    });
+
+  const readFileAsBinary = (file: File): Promise<string> =>
+    new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload = () => res(reader.result as string);
+      reader.onerror = rej;
+      reader.readAsBinaryString(file);
+    });
+
+  const readFileAsText = (file: File): Promise<string> =>
+    new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload = () => res(reader.result as string);
+      reader.onerror = rej;
+      reader.readAsText(file);
+    });
+
+  const handleFilesSelected = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const newAttachments: AttachedFile[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const fileId = `file-${Date.now()}-${i}`;
+
+      try {
+        if (file.type.startsWith('image/')) {
+          const base64 = await readFileAsDataURL(file);
+          newAttachments.push({
+            id: fileId,
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            base64,
+            previewUrl: base64,
+          });
+        } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          const base64 = await readFileAsDataURL(file);
+          newAttachments.push({
+            id: fileId,
+            name: file.name,
+            size: file.size,
+            type: 'application/pdf',
+            base64,
+          });
+        } else if (
+          file.name.toLowerCase().endsWith('.xlsx') ||
+          file.name.toLowerCase().endsWith('.xls') ||
+          file.name.toLowerCase().endsWith('.csv')
+        ) {
+          const buffer = await readFileAsArrayBuffer(file);
+          const workbook = XLSX.read(buffer, { type: 'array' });
+          let combinedCsv = '';
+          workbook.SheetNames.slice(0, 3).forEach((sheetName) => {
+            const sheet = workbook.Sheets[sheetName];
+            const csv = XLSX.utils.sheet_to_csv(sheet);
+            combinedCsv += `--- HOJA: ${sheetName} ---\n${csv}\n`;
+          });
+          newAttachments.push({
+            id: fileId,
+            name: file.name,
+            size: file.size,
+            type: file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            textContent: combinedCsv.slice(0, 40000),
+          });
+        } else if (file.name.toLowerCase().endsWith('.docx') || file.name.toLowerCase().endsWith('.doc')) {
+          const raw = await readFileAsBinary(file);
+          const matches = raw.match(/<w:t[^>]*>(.*?)<\/w:t>/g);
+          const extracted = matches
+            ? matches.map((m) => m.replace(/<[^>]+>/g, '')).join(' ')
+            : file.name;
+          newAttachments.push({
+            id: fileId,
+            name: file.name,
+            size: file.size,
+            type: file.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            textContent: extracted.slice(0, 40000),
+          });
+        } else {
+          const text = await readFileAsText(file);
+          newAttachments.push({
+            id: fileId,
+            name: file.name,
+            size: file.size,
+            type: file.type || 'text/plain',
+            textContent: text.slice(0, 40000),
+          });
+        }
+      } catch (fileErr) {
+        console.warn(`Error procesando archivo ${file.name}:`, fileErr);
+      }
+    }
+
+    setAttachedFiles((prev) => [...prev, ...newAttachments]);
+  };
 
   // WhatsApp Automation State
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -205,13 +341,17 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
 
   const handleSendPrompt = async (promptText?: string) => {
     const textToSend = promptText || inputPrompt;
-    if (!textToSend.trim() || isTyping) return;
+    if ((!textToSend.trim() && attachedFiles.length === 0) || isTyping) return;
+
+    const filesToSend = [...attachedFiles];
+    setAttachedFiles([]);
 
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       sender: 'USER',
-      text: textToSend,
+      text: textToSend || `📎 Se adjuntaron ${filesToSend.length} archivo(s) para procesamiento.`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      attachments: filesToSend,
     };
 
     setChatMessages((prev) => [...prev, userMsg]);
@@ -231,10 +371,11 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: textToSend,
+          prompt: textToSend || 'Analiza y procesa los documentos o imágenes adjuntas en la plataforma según la normatividad.',
           history: chatMessages.slice(-6).map((m) => ({ sender: m.sender, text: m.text })),
           customKeys: getStoredGeminiKeys(),
           preferredModel: selectedModel,
+          attachments: filesToSend,
           currentContext,
         }),
       });
@@ -419,6 +560,30 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
                           : 'bg-blue-600 text-white'
                       }`}
                     >
+                      {/* Archivos adjuntos enviados por el usuario */}
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-2 pb-2 border-b border-white/20">
+                          {msg.attachments.map((att) => (
+                            <div
+                              key={att.id}
+                              className="flex items-center gap-1.5 p-1.5 px-2.5 rounded-xl bg-blue-700/60 border border-blue-400/40 text-[11px] font-mono"
+                            >
+                              {att.previewUrl ? (
+                                <img src={att.previewUrl} alt={att.name} className="h-6 w-6 rounded object-cover" />
+                              ) : att.name.toLowerCase().endsWith('.pdf') ? (
+                                <FileText size={13} className="text-red-200" />
+                              ) : att.name.toLowerCase().endsWith('.xlsx') || att.name.toLowerCase().endsWith('.xls') || att.name.toLowerCase().endsWith('.csv') ? (
+                                <FileSpreadsheet size={13} className="text-emerald-200" />
+                              ) : (
+                                <FileText size={13} className="text-blue-200" />
+                              )}
+                              <span className="truncate max-w-[140px] font-medium">{att.name}</span>
+                              <span className="text-[9px] opacity-70">({(att.size / 1024).toFixed(0)}KB)</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
                       <div className="whitespace-pre-wrap">{msg.text}</div>
 
                       {/* Tarjeta Visual de Acción Ejecutada en la Plataforma */}
@@ -515,20 +680,108 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
                 <div ref={messagesEndRef} />
               </div>
 
+              {/* Contenedor de Archivos Adjuntos (Estilo LibreChat) */}
+              {attachedFiles.length > 0 && (
+                <div className="flex items-center gap-2 overflow-x-auto p-2 bg-slate-50 dark:bg-slate-950/90 rounded-xl border border-slate-200 dark:border-slate-800 mb-2 shrink-0">
+                  {attachedFiles.map((file) => (
+                    <div
+                      key={file.id}
+                      className="flex items-center gap-2 p-1.5 pr-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs shrink-0 shadow-sm"
+                    >
+                      {file.previewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={file.previewUrl} alt={file.name} className="h-8 w-8 rounded-lg object-cover" />
+                      ) : file.name.toLowerCase().endsWith('.pdf') ? (
+                        <div className="h-8 w-8 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center font-bold text-[9px] border border-red-500/20">
+                          PDF
+                        </div>
+                      ) : file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls') || file.name.toLowerCase().endsWith('.csv') ? (
+                        <div className="h-8 w-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-[9px] border border-emerald-500/20">
+                          XLS
+                        </div>
+                      ) : file.name.toLowerCase().endsWith('.docx') || file.name.toLowerCase().endsWith('.doc') ? (
+                        <div className="h-8 w-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-[9px] border border-blue-500/20">
+                          DOC
+                        </div>
+                      ) : (
+                        <div className="h-8 w-8 rounded-lg bg-slate-500/10 text-slate-600 dark:text-slate-400 flex items-center justify-center font-bold text-[9px] border border-slate-500/20">
+                          TXT
+                        </div>
+                      )}
+                      <div className="flex flex-col max-w-[140px]">
+                        <span className="truncate text-[11px] font-semibold text-slate-800 dark:text-slate-200" title={file.name}>
+                          {file.name}
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-mono">
+                          {(file.size / 1024).toFixed(0)} KB
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAttachedFiles((prev) => prev.filter((f) => f.id !== file.id))}
+                        className="text-slate-400 hover:text-red-500 transition-colors p-1"
+                        title="Eliminar archivo"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Chat Input Bar */}
-              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2">
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  handleFilesSelected(e.dataTransfer.files);
+                }}
+                className={`pt-2.5 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2 transition-all ${
+                  isDragging ? 'p-2 ring-2 ring-blue-500 rounded-xl bg-blue-50/50 dark:bg-blue-950/20' : ''
+                }`}
+              >
+                {/* Botón Adjuntar Archivo (LibreChat Style) */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center shadow-sm shrink-0"
+                  title="Adjuntar Imágenes, PDFs, Excel (.xlsx/.xls) o Word (.docx)"
+                >
+                  <Paperclip size={16} />
+                </button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  multiple
+                  onChange={(e) => {
+                    handleFilesSelected(e.target.files);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                  }}
+                  accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,text/plain"
+                  className="hidden"
+                />
+
                 <input
                   type="text"
                   value={inputPrompt}
                   onChange={(e) => setInputPrompt(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendPrompt()}
-                  placeholder="Instruye al agente: 'Crear empresa...', 'Agendar visita...', 'Registrar FURAT...', etc."
+                  placeholder={
+                    attachedFiles.length > 0
+                      ? 'Escribe instrucciones para los archivos adjuntos (o presiona Enter)...'
+                      : 'Instruye al agente o adjunta documentos (PDF, Excel, Word, imágenes)...'
+                  }
                   disabled={isTyping}
                   className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                 />
                 <button
                   onClick={() => handleSendPrompt()}
-                  disabled={isTyping || !inputPrompt.trim()}
+                  disabled={isTyping || (!inputPrompt.trim() && attachedFiles.length === 0)}
                   className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 transition-all disabled:opacity-50"
                   title="Enviar instrucción"
                 >
