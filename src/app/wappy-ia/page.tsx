@@ -52,7 +52,7 @@ import {
   ARLCompany,
 } from '@/types';
 import { ToolExecutionResult } from '@/lib/aiTools';
-import { extractKeyPool } from '@/lib/geminiRotator';
+import { extractKeyPool, LIBRECHAT_WAPPY_MODELS } from '@/lib/geminiRotator';
 
 interface ChatMessage {
   id: string;
@@ -74,6 +74,7 @@ export default function WappyIAPage() {
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [geminiKeys, setGeminiKeys] = useState<string>('');
   const [keyPool, setKeyPool] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-3.7-flash');
   const [activeTab, setActiveTab] = useState<'ASSISTANT' | 'WHATSAPP'>('ASSISTANT');
 
   // AI Assistant Chat State
@@ -116,6 +117,11 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
     const keys = getStoredGeminiKeys();
     setGeminiKeys(keys);
     setKeyPool(extractKeyPool(keys));
+
+    const savedModel = localStorage.getItem('praxis_selected_model_v1');
+    if (savedModel && LIBRECHAT_WAPPY_MODELS.includes(savedModel)) {
+      setSelectedModel(savedModel);
+    }
 
     if (cls.length > 0 && !selectedClientId) {
       setSelectedClientId(cls[0].id);
@@ -228,6 +234,7 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
           prompt: textToSend,
           history: chatMessages.slice(-6).map((m) => ({ sender: m.sender, text: m.text })),
           customKeys: getStoredGeminiKeys(),
+          preferredModel: selectedModel,
           currentContext,
         }),
       });
@@ -316,6 +323,27 @@ No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decret
 
         {/* Tab Buttons & Key Pool Pill */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5">
+          {/* Selector de Modelos de LibreChat-WAPPY */}
+          <div className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs flex items-center gap-1.5 shadow-sm">
+            <Sparkles size={13} className="text-amber-500 shrink-0" />
+            <span className="text-[10px] font-bold text-slate-400 uppercase hidden sm:inline">Modelo:</span>
+            <select
+              value={selectedModel}
+              onChange={(e) => {
+                setSelectedModel(e.target.value);
+                localStorage.setItem('praxis_selected_model_v1', e.target.value);
+              }}
+              className="bg-transparent text-slate-800 dark:text-slate-200 text-xs font-bold outline-none cursor-pointer pr-1"
+              title="Selecciona el modelo principal de Gemini (con rotación dual y fallback de LibreChat)"
+            >
+              {LIBRECHAT_WAPPY_MODELS.map((m) => (
+                <option key={m} value={m} className="dark:bg-slate-900 text-slate-900 dark:text-white">
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Key Pool Pill */}
           <div
             onClick={openProfileKeysModal}

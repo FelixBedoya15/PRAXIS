@@ -746,26 +746,47 @@ export default function ProfileModal({ isOpen, onClose, defaultTab = 'USER' }: P
                 </p>
               </div>
 
-              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-xs space-y-1.5">
-                <span className="text-[10px] font-mono text-slate-400 block uppercase">
-                  Mapeo de Modelos de Contingencia Automática:
-                </span>
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono text-slate-400 block uppercase font-bold">
+                    Jerarquía de Modelos LibreChat-WAPPY (GOOGLE_MODELS):
+                  </span>
+                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold">
+                    Rotación Dual Activa
+                  </span>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-mono">
-                  <div className="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                    <span className="text-blue-500 font-bold block">1. Principal</span>
-                    <span className="text-slate-600 dark:text-slate-300">gemini-2.5-flash</span>
+                  <div className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <span className="text-amber-500 font-bold block">1. Predeterminado</span>
+                    <span className="text-slate-700 dark:text-slate-200">gemini-3.7-flash</span>
                   </div>
-                  <div className="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                    <span className="text-indigo-500 font-bold block">2. Fallback</span>
-                    <span className="text-slate-600 dark:text-slate-300">gemini-2.0-flash</span>
+                  <div className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <span className="text-blue-500 font-bold block">2. Alta Velocidad</span>
+                    <span className="text-slate-700 dark:text-slate-200">gemini-3.6-flash</span>
                   </div>
-                  <div className="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                    <span className="text-emerald-500 font-bold block">3. Fallback</span>
-                    <span className="text-slate-600 dark:text-slate-300">gemini-1.5-flash</span>
+                  <div className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <span className="text-indigo-500 font-bold block">3. Flash Estándar</span>
+                    <span className="text-slate-700 dark:text-slate-200">gemini-3.5-flash</span>
                   </div>
-                  <div className="p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
-                    <span className="text-purple-500 font-bold block">4. Razonamiento</span>
-                    <span className="text-slate-600 dark:text-slate-300">gemini-1.5-pro</span>
+                  <div className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <span className="text-emerald-500 font-bold block">4. Titulación/Lite</span>
+                    <span className="text-slate-700 dark:text-slate-200">gemini-3.5-flash-lite</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <span className="text-cyan-500 font-bold block">5. Live Preview</span>
+                    <span className="text-slate-700 dark:text-slate-200">gemini-3.1-live</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <span className="text-teal-500 font-bold block">6. Eficiente</span>
+                    <span className="text-slate-700 dark:text-slate-200">gemini-2.5-flash</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <span className="text-violet-500 font-bold block">7. Fallback</span>
+                    <span className="text-slate-700 dark:text-slate-200">gemini-2.0-flash</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <span className="text-purple-500 font-bold block">8. Razonamiento</span>
+                    <span className="text-slate-700 dark:text-slate-200">gemini-1.5-pro</span>
                   </div>
                 </div>
               </div>

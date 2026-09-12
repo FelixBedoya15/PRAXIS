@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { prompt, history = [], customKeys, currentContext = {} } = body;
+    const { prompt, history = [], customKeys, currentContext = {}, preferredModel } = body;
 
     if (!prompt || typeof prompt !== 'string') {
       return NextResponse.json({ error: 'Se requiere el parámetro "prompt".' }, { status: 400 });
@@ -61,13 +61,14 @@ REGLAS DE OPERACIÓN:
     });
 
     try {
-      // Llamada al rotador dual-axis de Gemini
+      // Llamada al rotador dual-axis de Gemini (Modelos y Claves estilo LibreChat-WAPPY)
       const geminiResult = await callGeminiWithRotation({
         contents,
         systemInstruction,
         tools: PRAXIS_GEMINI_TOOLS,
         temperature: 0.2,
         customKeys,
+        preferredModel,
       });
 
       const candidate = geminiResult.data?.candidates?.[0];
