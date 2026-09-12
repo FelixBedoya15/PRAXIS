@@ -51,8 +51,10 @@ import {
   Info,
   Award,
   ClipboardList,
-  Save
+  Save,
+  Upload
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { getStoredARLs, getStoredClients, saveStoredClients, getStoredLeads, saveStoredLeads, getStoredAgencyProfile } from '@/lib/storage';
 import { ARLCompany, ClientCompany, CommissionConcept, RiskClass, RISK_RATES, LeadProspect, LeadStage, WorkCenter, AgencyProfile } from '@/types';
 import { calculateCompanyFinancials, CompanyFinancialTotals } from '@/lib/calculations';
@@ -122,6 +124,7 @@ export default function ClientesPage() {
   const [showReopenModal, setShowReopenModal] = useState(false);
   const [reopenClient, setReopenClient] = useState<ClientCompany | null>(null);
   const [reopenTargetStage, setReopenTargetStage] = useState<LeadStage>('CARTA_NOMBRAMIENTO');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // WhatsApp Step-by-Step Cadence Modal State
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
@@ -1003,32 +1006,369 @@ A partir de este momento cuentan con el respaldo integral de *PRAXIS Prevención
     setShowLetterModal(true);
   };
 
-  const handleExportCSV = () => {
-    let csvContent = 'data:text/csv;charset=utf-8,';
-    if (activeTab === 'LEADS') {
-      csvContent += 'ID,Empresa,NIT,Ciudad,ARL_Actual,ARL_Propuesta,Riesgo_Principal,Centros_Trabajo,IBC_Mensual,Empleados,Etapa,Comision_Estimada,Rep_Legal,Celular_Rep,Encargado_SST\n';
-      leads.forEach((l) => {
-        const arl = arls.find((a) => a.id === l.proposedArlId);
-        const fin = calculateCompanyFinancials(l, arl);
-        csvContent += `"${l.id}","${l.name}","${l.nit}","${l.city}","${l.currentArlId}","${l.proposedArlId}","${l.riskClass}",${fin.workCentersCount},${fin.totalIbc},${fin.totalEmployees},"${l.stage}",${fin.totalCommission},"${l.legalRepName}","${l.legalRepPhone}","${l.sstResponsibleName}"\n`;
-      });
-    } else {
-      csvContent += 'ID,Empresa,NIT,Ciudad,ARL,Riesgo_Principal,Centros_Trabajo,IBC_Mensual,Empleados,Concepto,Rep_Legal,Celular_Rep,Encargado_SST,Licencia_SST\n';
-      clients.forEach((c) => {
-        const arl = arls.find((a) => a.id === c.primaryArlId);
-        const fin = calculateCompanyFinancials(c, arl);
-        csvContent += `"${c.id}","${c.name}","${c.nit}","${c.city}","${c.primaryArlId}","${c.riskClass}",${fin.workCentersCount},${fin.totalIbc},${fin.totalEmployees},"${c.conceptType}","${c.legalRepName}","${c.legalRepPhone}","${c.sstResponsibleName}","${c.sstResponsibleLicense || ''}"\n`;
-      });
-    }
+  // Native Excel (.xlsx) Export Handler
+  const handleExportExcel = () => {
+    try {
+      const wb = XLSX.utils.book_new();
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `wappy_${activeTab.toLowerCase()}_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast(`Base de datos exportada a CSV`);
+      if (activeTab === 'LEADS') {
+        const leadsData = leads.map((l) => {
+          const arl = arls.find((a) => a.id === l.proposedArlId);
+          const fin = calculateCompanyFinancials(l, arl);
+          return {
+            'NIT': l.nit,
+            'Empresa (Prospecto)': l.name,
+            'Ciudad': l.city,
+            'Actividad Económica': l.economicActivity,
+            'Código CIIU': l.ciiuCode || '',
+            'ARL Actual': arls.find((a) => a.id === l.currentArlId)?.name || l.currentArlId,
+            'ARL Propuesta': arls.find((a) => a.id === l.proposedArlId)?.name || l.proposedArlId,
+            'Clase Riesgo': l.riskClass.replace('_', ' '),
+            'Número Empleados': fin.totalEmployees,
+            'Nómina Total IBC (COP)': fin.totalIbc,
+            'Aporte ARL Ponderado (COP)': fin.totalArlContribution,
+            'Comisión Mensual Estimada (COP)': fin.totalCommission,
+            'Etapa del Embudo': l.stage,
+            'Fuente de Prospección': l.source,
+            'Representante Legal': l.legalRepName,
+            'Teléfono Representante': l.legalRepPhone,
+            'Correo Representante': l.legalRepEmail,
+            'Responsable SG-SST': l.sstResponsibleName,
+            'Teléfono SST': l.sstResponsiblePhone,
+            'Próximo Seguimiento': l.nextFollowUpDate,
+            'Acción de Seguimiento': l.nextFollowUpAction,
+            'Notas': l.notes,
+          };
+        });
+
+        const wsLeads = XLSX.utils.json_to_sheet(leadsData);
+        XLSX.utils.book_append_sheet(wb, wsLeads, 'Pipeline Leads');
+        XLSX.writeFile(wb, `praxis_pipeline_leads_${new Date().toISOString().split('T')[0]}.xlsx`);
+        showToast('✅ Archivo Excel (.xlsx) descargado exitosamente');
+      } else {
+        const clientsData = clients.map((c) => {
+          const arl = arls.find((a) => a.id === c.primaryArlId);
+          const fin = calculateCompanyFinancials(c, arl);
+          return {
+            'NIT': c.nit,
+            'Razón Social (Empresa)': c.name,
+            'Ciudad': c.city,
+            'Dirección': c.address,
+            'Actividad Económica': c.economicActivity,
+            'Código CIIU': c.ciiuCode,
+            'ARL': arl?.name || c.primaryArlId,
+            'Clase de Riesgo': c.riskClass.replace('_', ' '),
+            'Centros de Trabajo': fin.workCentersCount,
+            'Número de Empleados': fin.totalEmployees,
+            'Nómina Total IBC (COP)': fin.totalIbc,
+            'Aporte ARL Ponderado (COP)': fin.totalArlContribution,
+            'Comisión Mensual Agencia (COP)': fin.totalCommission,
+            '% Retorno SST': `${c.returnPercentage ?? 25}%`,
+            'Bolsa Retorno SST (COP)': fin.totalCommission * ((c.returnPercentage ?? 25) / 100),
+            'Concepto Intermediación': c.conceptType === 'CAMBIO_INTERMEDIARIO' ? 'Cambio de Intermediario' : c.conceptType === 'EMPRESA_NUEVA' ? 'Empresa Nueva' : 'Nombramiento',
+            'Representante Legal': c.legalRepName,
+            'Teléfono Representante': c.legalRepPhone,
+            'Correo Representante': c.legalRepEmail,
+            'Responsable SG-SST': c.sstResponsibleName,
+            'Teléfono SST': c.sstResponsiblePhone,
+            'Licencia SST': c.sstResponsibleLicense || '',
+            'Calificación Res 0312': c.standardsScore !== undefined ? `${c.standardsScore}% (${c.standardsRating || 'Registrado'})` : 'Sin auditar',
+            'Estado': c.status,
+          };
+        });
+
+        const wsClients = XLSX.utils.json_to_sheet(clientsData);
+        XLSX.utils.book_append_sheet(wb, wsClients, 'Empresas Clientes');
+
+        // Hoja 2: Centros de Trabajo Detallados
+        const workCentersData: any[] = [];
+        clients.forEach((c) => {
+          if (c.workCenters && c.workCenters.length > 0) {
+            c.workCenters.forEach((wc) => {
+              workCentersData.push({
+                'NIT Empresa': c.nit,
+                'Razón Social': c.name,
+                'Centro de Trabajo': wc.name,
+                'Ciudad': wc.city || c.city,
+                'Dirección': wc.address || c.address,
+                'Clase de Riesgo': wc.riskClass.replace('_', ' '),
+                'Tarifa Riesgo ARL': RISK_RATES[wc.riskClass]?.percentageText,
+                'Número Empleados': wc.employeeCount,
+                'Nómina Mensual IBC (COP)': wc.monthlyIbc,
+                'Aporte ARL Estimado (COP)': Math.round(wc.monthlyIbc * RISK_RATES[wc.riskClass].nominalRate),
+              });
+            });
+          }
+        });
+
+        if (workCentersData.length > 0) {
+          const wsCenters = XLSX.utils.json_to_sheet(workCentersData);
+          XLSX.utils.book_append_sheet(wb, wsCenters, 'Centros de Trabajo');
+        }
+
+        XLSX.writeFile(wb, `praxis_empresas_clientes_${new Date().toISOString().split('T')[0]}.xlsx`);
+        showToast('✅ Libro de Excel nativo (.xlsx) generado con 2 hojas');
+      }
+    } catch (err) {
+      console.error('Error al exportar Excel:', err);
+      showToast('❌ Error al generar el archivo Excel');
+    }
+  };
+
+  // Plantilla Oficial para Importación
+  const handleDownloadTemplate = () => {
+    try {
+      const wb = XLSX.utils.book_new();
+      if (activeTab === 'LEADS') {
+        const templateData = [
+          {
+            'NIT': '900.876.543-2',
+            'Empresa': 'Distribuciones Logísticas de Colombia S.A.S.',
+            'Ciudad': 'Medellín',
+            'Actividad Económica': 'Transporte de carga y logística',
+            'Código CIIU': '4923',
+            'ARL Actual': 'SURA',
+            'ARL Propuesta': 'POSITIVA',
+            'Clase de Riesgo': 'CLASE_IV',
+            'Número Empleados': 40,
+            'IBC Mensual': 75000000,
+            'Etapa': 'NUEVO_LEAD',
+            'Representante Legal': 'Alejandro Morales Ríos',
+            'Teléfono Representante': '+57 300 456 7890',
+            'Correo Representante': 'gerencia@distrilog.com',
+            'Responsable SST': 'Ing. Sofía Restrepo',
+            'Teléfono SST': '+57 312 345 6789',
+          },
+        ];
+        const ws = XLSX.utils.json_to_sheet(templateData);
+        XLSX.utils.book_append_sheet(wb, ws, 'Plantilla Leads');
+        XLSX.writeFile(wb, 'plantilla_importacion_leads_praxis.xlsx');
+      } else {
+        const templateData = [
+          {
+            'NIT': '900.123.456-7',
+            'Empresa': 'Industrias Metalmecánicas del Norte S.A.S.',
+            'Ciudad': 'Bogotá',
+            'Dirección': 'Carrera 68D # 13-40',
+            'Actividad Económica': 'Fabricación de estructuras metálicas',
+            'Código CIIU': '2511',
+            'ARL': 'SURA',
+            'Clase de Riesgo': 'CLASE_III',
+            'Número de Empleados': 35,
+            'IBC Mensual': 68000000,
+            '% Retorno SST': 25,
+            'Concepto': 'CAMBIO_INTERMEDIARIO',
+            'Representante Legal': 'Carlos Andrés Pérez',
+            'Teléfono Representante': '+57 310 123 4567',
+            'Correo Representante': 'gerencia@metalnorte.com',
+            'Responsable SST': 'Ing. Laura Gómez R.',
+            'Teléfono SST': '+57 320 987 6543',
+            'Licencia SST': 'Lic-SST-98765-2024',
+          },
+        ];
+        const ws = XLSX.utils.json_to_sheet(templateData);
+        XLSX.utils.book_append_sheet(wb, ws, 'Plantilla Empresas');
+        XLSX.writeFile(wb, 'plantilla_importacion_empresas_praxis.xlsx');
+      }
+      showToast('📥 Plantilla oficial Excel (.xlsx) descargada');
+    } catch (err) {
+      console.error('Error al descargar plantilla:', err);
+    }
+  };
+
+  // Importación Inteligente de Excel (.xlsx / .xls / .csv)
+  const handleImportExcelFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' });
+
+      if (!rows || rows.length === 0) {
+        alert('El archivo Excel está vacío o no contiene filas con datos válidos.');
+        return;
+      }
+
+      // Función flexible para extraer columnas con nombres alternativos
+      const getVal = (row: Record<string, any>, aliases: string[]): string => {
+        for (const alias of aliases) {
+          const key = Object.keys(row).find(
+            (k) => k.trim().toLowerCase() === alias.trim().toLowerCase()
+          );
+          if (key && row[key] !== undefined && row[key] !== null) {
+            return String(row[key]).trim();
+          }
+        }
+        return '';
+      };
+
+      const parseNumber = (val: string): number => {
+        if (!val) return 0;
+        const cleaned = val.replace(/[^0-9.-]/g, '');
+        const num = parseFloat(cleaned);
+        return isNaN(num) ? 0 : num;
+      };
+
+      const normalizeArl = (raw: string): string => {
+        const lower = (raw || '').toLowerCase();
+        if (lower.includes('sura') || lower.includes('suramericana')) return 'sura';
+        if (lower.includes('positiva')) return 'positiva';
+        if (lower.includes('colpatria') || lower.includes('axa')) return 'colpatria';
+        if (lower.includes('bolivar') || lower.includes('bolívar')) return 'bolivar';
+        if (lower.includes('equidad')) return 'equidad';
+        if (lower.includes('aurora')) return 'aurora';
+        return 'sura';
+      };
+
+      const normalizeRisk = (raw: string): RiskClass => {
+        const upper = (raw || '').toUpperCase().replace(/\s+/g, '_');
+        if (upper.includes('V') || upper.includes('5')) return 'CLASE_V';
+        if (upper.includes('IV') || upper.includes('4')) return 'CLASE_IV';
+        if (upper.includes('III') || upper.includes('3')) return 'CLASE_III';
+        if (upper.includes('II') || upper.includes('2')) return 'CLASE_II';
+        return 'CLASE_I';
+      };
+
+      const normalizeConcept = (raw: string): CommissionConcept => {
+        const upper = (raw || '').toUpperCase();
+        if (upper.includes('NUEVA')) return 'EMPRESA_NUEVA';
+        if (upper.includes('CAMBIO')) return 'CAMBIO_INTERMEDIARIO';
+        return 'NOMBRAMIENTO';
+      };
+
+      let importedCount = 0;
+
+      if (activeTab === 'LEADS') {
+        const newLeads: LeadProspect[] = [];
+        rows.forEach((row, idx) => {
+          const name = getVal(row, ['Empresa', 'Razón Social', 'Razon Social', 'Nombre', 'name', 'Prospecto', 'Empresa (Prospecto)']);
+          const nit = getVal(row, ['NIT', 'nit', 'Identificación', 'Identificacion', 'Documento']) || `900.${Math.floor(100000 + Math.random() * 900000)}-${idx + 1}`;
+          if (!name) return;
+
+          const currentArlId = normalizeArl(getVal(row, ['ARL_Actual', 'ARL Actual', 'arl_actual', 'ARL']));
+          const proposedArlId = normalizeArl(getVal(row, ['ARL_Propuesta', 'ARL Propuesta', 'arl_propuesta', 'ARL Propuesta']) || currentArlId);
+          const riskClass = normalizeRisk(getVal(row, ['Riesgo_Principal', 'Riesgo', 'Clase de Riesgo', 'Clase Riesgo', 'Clase', 'riskClass']));
+          const estimatedIbc = parseNumber(getVal(row, ['IBC_Mensual', 'IBC', 'Nómina', 'Nomina', 'Nómina Total IBC (COP)', 'estimatedIbc'])) || 10000000;
+          const employeeCount = parseInt(getVal(row, ['Empleados', 'Numero Empleados', 'Número Empleados', 'employeeCount']), 10) || 5;
+          const city = getVal(row, ['Ciudad', 'city', 'Municipio']) || 'Bogotá';
+          const economicActivity = getVal(row, ['Actividad_Economica', 'Actividad Económica', 'Actividad', 'economicActivity']) || 'Comercio y Servicios';
+          const ciiuCode = getVal(row, ['CIIU', 'Código CIIU', 'Codigo CIIU', 'ciiuCode']) || '4690';
+          const stageRaw = getVal(row, ['Etapa', 'stage', 'Estado', 'Etapa del Embudo']).toUpperCase();
+          const stage: LeadStage = stageRaw.includes('PROPUESTA') ? 'PROPUESTA_ENVIADA'
+            : stageRaw.includes('CARTA') ? 'CARTA_NOMBRAMIENTO'
+            : stageRaw.includes('GANADA') ? 'GANADA_AFILIADA'
+            : stageRaw.includes('DIAG') ? 'DIAGNOSTICO_ARL'
+            : 'NUEVO_LEAD';
+
+          newLeads.push({
+            id: `lead-${Date.now()}-${idx}`,
+            name,
+            nit,
+            economicActivity,
+            ciiuCode,
+            currentArlId,
+            proposedArlId,
+            riskClass,
+            estimatedIbc,
+            employeeCount,
+            city,
+            stage,
+            source: 'REFERIDO',
+            conceptType: 'CAMBIO_INTERMEDIARIO',
+            legalRepName: getVal(row, ['Rep_Legal', 'Representante Legal', 'Representante', 'legalRepName']) || 'Representante Legal',
+            legalRepEmail: getVal(row, ['Email_Rep', 'Correo Representante', 'legalRepEmail']) || 'contacto@empresa.com',
+            legalRepPhone: getVal(row, ['Celular_Rep', 'Teléfono Representante', 'Telefono', 'legalRepPhone']) || '+57 300 123 4567',
+            sstResponsibleName: getVal(row, ['Encargado_SST', 'Responsable SG-SST', 'Responsable SST', 'sstResponsibleName']) || 'Encargado SG-SST',
+            sstResponsibleEmail: getVal(row, ['Email_SST', 'Correo SST', 'sstResponsibleEmail']) || 'sst@empresa.com',
+            sstResponsiblePhone: getVal(row, ['Celular_SST', 'Teléfono SST', 'sstResponsiblePhone']) || '+57 310 987 6543',
+            nextFollowUpDate: new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0],
+            nextFollowUpAction: 'Presentación de propuesta técnica y retorno SST',
+            estimatedMonthlyCommission: Math.round(estimatedIbc * 0.02436 * 0.08),
+            notes: `Importado desde archivo Excel (${file.name})`,
+            createdAt: new Date().toISOString(),
+          });
+        });
+
+        if (newLeads.length > 0) {
+          const updated = [...leads, ...newLeads];
+          setLeads(updated);
+          saveStoredLeads(updated);
+          importedCount = newLeads.length;
+          showToast(`✅ ${importedCount} leads importados exitosamente al Pipeline desde Excel.`);
+        } else {
+          alert('No se pudieron reconocer filas de prospectos válidas en el archivo.');
+        }
+      } else {
+        // CLIENTES
+        const newClients: ClientCompany[] = [];
+        rows.forEach((row, idx) => {
+          const name = getVal(row, ['Empresa', 'Razón Social', 'Razon Social', 'Nombre', 'name', 'Razón Social (Empresa)']);
+          const nit = getVal(row, ['NIT', 'nit', 'Identificación', 'Identificacion', 'Documento']) || `800.${Math.floor(100000 + Math.random() * 900000)}-${idx + 1}`;
+          if (!name) return;
+
+          const primaryArlId = normalizeArl(getVal(row, ['ARL', 'primaryArlId', 'Aseguradora']));
+          const riskClass = normalizeRisk(getVal(row, ['Riesgo_Principal', 'Riesgo', 'Clase de Riesgo', 'Clase', 'riskClass']));
+          const monthlyIbc = parseNumber(getVal(row, ['IBC_Mensual', 'Nómina Total IBC (COP)', 'IBC', 'monthlyIbc', 'Nomina', 'Nómina'])) || 15000000;
+          const employeeCount = parseInt(getVal(row, ['Empleados', 'Número de Empleados', 'employeeCount']), 10) || 10;
+          const city = getVal(row, ['Ciudad', 'city', 'Municipio']) || 'Bogotá';
+          const address = getVal(row, ['Dirección', 'Direccion', 'address']) || 'Calle Principal';
+          const economicActivity = getVal(row, ['Actividad_Economica', 'Actividad Económica', 'Actividad', 'economicActivity']) || 'Actividades Comerciales e Industriales';
+          const ciiuCode = getVal(row, ['CIIU', 'Código CIIU', 'Codigo CIIU', 'ciiuCode']) || '4690';
+          const conceptType = normalizeConcept(getVal(row, ['Concepto', 'conceptType', 'Concepto Intermediación']));
+          const returnPercentage = parseNumber(getVal(row, ['Retorno', '% Retorno SST', 'returnPercentage'])) || 25;
+
+          newClients.push({
+            id: `cli-${Date.now()}-${idx}`,
+            nit,
+            name,
+            economicActivity,
+            ciiuCode,
+            primaryArlId,
+            riskClass,
+            monthlyIbc,
+            employeeCount,
+            address,
+            city,
+            conceptType,
+            returnPercentage,
+            status: 'ACTIVO',
+            legalRepName: getVal(row, ['Rep_Legal', 'Representante Legal', 'Representante', 'legalRepName']) || 'Representante Legal',
+            legalRepEmail: getVal(row, ['Email_Rep', 'Correo Representante', 'legalRepEmail']) || 'gerencia@empresa.com',
+            legalRepPhone: getVal(row, ['Celular_Rep', 'Teléfono Representante', 'Telefono', 'legalRepPhone']) || '+57 300 000 0000',
+            sstResponsibleName: getVal(row, ['Encargado_SST', 'Responsable SG-SST', 'Responsable SST', 'sstResponsibleName']) || 'Coordinador SST',
+            sstResponsibleEmail: getVal(row, ['Email_SST', 'Correo SST', 'sstResponsibleEmail']) || 'sst@empresa.com',
+            sstResponsiblePhone: getVal(row, ['Celular_SST', 'Teléfono SST', 'sstResponsiblePhone']) || '+57 310 000 0000',
+            sstResponsibleLicense: getVal(row, ['Licencia_SST', 'Licencia SST', 'sstResponsibleLicense']) || 'Lic. 0312-SST',
+            standardsScore: parseNumber(getVal(row, ['Calificación Res 0312', 'standardsScore'])) || 85,
+            standardsRating: 'ACEPTABLE',
+            standardsCount: 60,
+            createdAt: new Date().toISOString(),
+          });
+        });
+
+        if (newClients.length > 0) {
+          const updated = [...clients, ...newClients];
+          setClients(updated);
+          saveStoredClients(updated);
+          importedCount = newClients.length;
+          showToast(`✅ ${importedCount} empresas clientes importadas exitosamente desde Excel.`);
+        } else {
+          alert('No se pudieron reconocer filas de empresas válidas en el archivo.');
+        }
+      }
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      window.dispatchEvent(new CustomEvent('praxis_data_synced'));
+    } catch (err) {
+      console.error('Error al importar archivo Excel:', err);
+      alert('Error al leer el archivo Excel. Asegúrate de que sea un archivo .xlsx, .xls o .csv válido.');
+    }
   };
 
   const handleDeleteLead = (id: string) => {
@@ -1117,12 +1457,39 @@ A partir de este momento cuentan con el respaldo integral de *PRAXIS Prevención
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2 pt-1 md:pt-0">
           <button
-            onClick={handleExportCSV}
+            type="button"
+            onClick={handleDownloadTemplate}
             className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-all shadow-sm"
-            title="Exportar a Excel / CSV"
+            title="Descargar plantilla de Excel (.xlsx) con estructura oficial"
+          >
+            <FileSpreadsheet size={14} className="text-emerald-500" /> <span className="inline">Plantilla</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 hover:border-emerald-300 dark:hover:border-emerald-700 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-all shadow-sm"
+            title="Importar empresas o prospectos desde archivo Excel (.xlsx / .xls / .csv)"
+          >
+            <Upload size={14} /> <span className="inline">Importar Excel</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-blue-700 dark:text-blue-400 hover:border-blue-300 dark:hover:border-blue-700 text-xs font-semibold border border-slate-200 dark:border-slate-700 transition-all shadow-sm"
+            title="Exportar a libro nativo de Microsoft Excel (.xlsx)"
           >
             <Download size={14} /> <span className="inline">Exportar Excel</span>
           </button>
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImportExcelFile}
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+          />
 
           {activeTab === 'LEADS' ? (
             <button
