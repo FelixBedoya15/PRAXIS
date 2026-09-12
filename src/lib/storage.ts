@@ -49,22 +49,28 @@ async function pushToServer(key: string, data: any) {
   }
 }
 
-// Sincroniza desde PostgreSQL hacia el cliente
-export async function syncFromServer(): Promise<{ connected: boolean; synced: boolean }> {
-  if (typeof window === 'undefined') return { connected: false, synced: false };
+// Sincroniza desde el Servidor / PostgreSQL hacia el cliente con fusión inteligente por ID
+export async function syncFromServer(): Promise<{
+  connected: boolean;
+  synced: boolean;
+  engine?: 'POSTGRESQL' | 'SERVER_FILE_STORAGE' | 'LOCAL_CACHE';
+}> {
+  if (typeof window === 'undefined') return { connected: false, synced: false, engine: 'LOCAL_CACHE' };
   cleanupLegacyStorage();
 
   try {
     const res = await fetch('/api/data', { cache: 'no-store' });
     const json = await res.json();
     if (!json.connected) {
-      return { connected: false, synced: false };
+      return { connected: false, synced: false, engine: 'LOCAL_CACHE' };
     }
 
+    const engine = (json.engine as 'POSTGRESQL' | 'SERVER_FILE_STORAGE') || 'SERVER_FILE_STORAGE';
     const serverData = json.data || {};
     const serverKeys = Object.keys(serverData);
 
-    // Si la base de datos está vacía o tiene llaves viejas sin los nuevos clientes
+    // Si la base de datos en servidor está vacía o le falta la clave de clientes,
+    // enviamos los datos actuales locales para inicializar el servidor
     if (serverKeys.length === 0 || !serverData[STORAGE_KEYS.CLIENTS]) {
       const initialBatch = {
         [STORAGE_KEYS.ARLS]: getStoredARLs(),
@@ -79,35 +85,110 @@ export async function syncFromServer(): Promise<{ connected: boolean; synced: bo
         [STORAGE_KEYS.USER_PROFILES]: getStoredUserProfiles(),
         [STORAGE_KEYS.ACTIVE_USER_ID]: getStoredActiveUserId(),
         [STORAGE_KEYS.LEADS]: getStoredLeads(),
+        [STORAGE_KEYS.CHAT_SESSIONS]: getStoredChatSessions(),
       };
       await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ batch: initialBatch }),
       });
-      return { connected: true, synced: true };
+      return { connected: true, synced: true, engine };
     }
 
-    // Si la base de datos tiene datos válidos, actualizar el almacenamiento local
-    let hasChanges = false;
-    for (const [key, val] of Object.entries(serverData)) {
-      const existing = localStorage.getItem(key);
-      const stringified = JSON.stringify(val);
-      if (existing !== stringified) {
-        localStorage.setItem(key, stringified);
-        hasChanges = true;
+    // Si el servidor tiene datos, realizamos una sincronización inteligente (Smart Merge)
+    // Para colecciones de array (clientes, leads, visitas, etc.), unificamos por id para NUNCA perder datos creados localmente
+    const arrayKeys: string[] = [
+      STORAGE_KEYS.CLIENTS,
+      STORAGE_KEYS.LEADS,
+      STORAGE_KEYS.ARLS,
+      STORAGE_KEYS.PILA_RECORDS,
+      STORAGE_KEYS.FIELD_VISITS,
+      STORAGE_KEYS.MEDICAL_RECORDS,
+      STORAGE_KEYS.OCCUPATIONAL_EXAMS,
+      STORAGE_KEYS.WHATSAPP_MESSAGES,
+      STORAGE_KEYS.USER_PROFILES,
+      STORAGE_KEYS.CHAT_SESSIONS,
+    ];
+
+    let hasLocalChanges = false;
+    const batchToPushBack: Record<string, any> = {};
+
+    for (const [key, serverVal] of Object.entries(serverData)) {
+      if (arrayKeys.includes(key) && Array.isArray(serverVal)) {
+        const localRaw = localStorage.getItem(key);
+        let localArray: any[] = [];
+        try {
+          if (localRaw) localArray = JSON.parse(localRaw);
+        } catch (e) {
+          localArray = [];
+        }
+
+        if (Array.isArray(localArray)) {
+          // Fusionar por ID
+          const map = new Map<string, any>();
+          // Primero agregar los del servidor
+          for (const item of serverVal) {
+            if (item && item.id) {
+              map.set(String(item.id), item);
+            }
+          }
+          // Luego verificar si lo local tiene elementos creados por el usuario que no estén aún en el servidor
+          let localHasNew = false;
+          for (const item of localArray) {
+            if (item && item.id) {
+              if (!map.has(String(item.id))) {
+                map.set(String(item.id), item);
+                localHasNew = true;
+              }
+            }
+          }
+
+          const mergedArray = Array.from(map.values());
+          const stringified = JSON.stringify(mergedArray);
+
+          if (localRaw !== stringified) {
+            localStorage.setItem(key, stringified);
+            hasLocalChanges = true;
+          }
+
+          // Si el cliente local tenía datos que el servidor no tenía, los enviamos de vuelta al servidor
+          if (localHasNew) {
+            batchToPushBack[key] = mergedArray;
+          }
+        } else {
+          // Si local estaba vacío, simplemente guardamos lo del servidor
+          localStorage.setItem(key, JSON.stringify(serverVal));
+          hasLocalChanges = true;
+        }
+      } else {
+        // Para objetos de configuración única (AGENCY_PROFILE, RUI_PROFILE, etc.)
+        const existing = localStorage.getItem(key);
+        const stringified = JSON.stringify(serverVal);
+        if (existing !== stringified) {
+          localStorage.setItem(key, stringified);
+          hasLocalChanges = true;
+        }
       }
     }
 
-    if (hasChanges) {
+    // Si encontramos elementos locales no guardados en el servidor, los enviamos en lote
+    if (Object.keys(batchToPushBack).length > 0) {
+      await fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batch: batchToPushBack }),
+      }).catch((e) => console.warn('[Sync] Pushback error:', e));
+    }
+
+    if (hasLocalChanges) {
       window.dispatchEvent(new CustomEvent('praxis_data_synced'));
       window.dispatchEvent(new CustomEvent('praxis_profile_updated'));
     }
 
-    return { connected: true, synced: true };
+    return { connected: true, synced: true, engine };
   } catch (err) {
     console.warn('[Sync] Sync failed:', err);
-    return { connected: false, synced: false };
+    return { connected: false, synced: false, engine: 'LOCAL_CACHE' };
   }
 }
 

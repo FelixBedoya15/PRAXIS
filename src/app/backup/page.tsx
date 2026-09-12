@@ -52,9 +52,12 @@ export default function BackupPage() {
     estimatedSizeKb: 0,
   });
 
+  const [dbEngine, setDbEngine] = useState<'POSTGRESQL' | 'SERVER_FILE_STORAGE' | 'LOCAL_CACHE'>('SERVER_FILE_STORAGE');
+  const [isDbOnline, setIsDbOnline] = useState<boolean>(true);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copiedEnv, setCopiedEnv] = useState(false);
+  const [copiedCloudEnv, setCopiedCloudEnv] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const calculateStats = () => {
@@ -85,6 +88,16 @@ export default function BackupPage() {
 
   useEffect(() => {
     calculateStats();
+    fetch('/api/data', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.engine) setDbEngine(json.engine);
+        if (typeof json.connected === 'boolean') setIsDbOnline(json.connected);
+      })
+      .catch(() => {
+        setIsDbOnline(false);
+        setDbEngine('LOCAL_CACHE');
+      });
   }, []);
 
   const handleExportFullBackup = () => {
@@ -182,6 +195,14 @@ export default function BackupPage() {
     showNotify('success', '📋 Variables de PostgreSQL copiadas al portapapeles.');
   };
 
+  const copyCloudPostgresEnv = () => {
+    const envText = `DATABASE_URL="postgresql://postgres:[TU-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres"`;
+    navigator.clipboard.writeText(envText);
+    setCopiedCloudEnv(true);
+    setTimeout(() => setCopiedCloudEnv(false), 2000);
+    showNotify('success', '📋 Plantilla de DATABASE_URL copiada al portapapeles.');
+  };
+
   return (
     <div className="space-y-6 max-w-full">
       {/* Header */}
@@ -246,9 +267,19 @@ export default function BackupPage() {
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm">
           <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Motor Principal</span>
           <div className="text-base font-extrabold text-slate-900 dark:text-white mt-1 flex items-center gap-1.5">
-            <Server size={16} className="text-indigo-500" /> PostgreSQL 16
+            {dbEngine === 'POSTGRESQL' ? (
+              <>
+                <Server size={16} className="text-emerald-500" /> PostgreSQL 16
+              </>
+            ) : (
+              <>
+                <HardDrive size={16} className="text-teal-500" /> Servidor Persistente
+              </>
+            )}
           </div>
-          <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">Docker / Dokploy Ready</span>
+          <span className={`text-[10px] font-medium ${dbEngine === 'POSTGRESQL' ? 'text-emerald-600 dark:text-emerald-400' : 'text-teal-600 dark:text-teal-400'}`}>
+            {dbEngine === 'POSTGRESQL' ? 'PostgreSQL Conectado' : 'Disco Servidor (JSON) Activo'}
+          </span>
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -368,44 +399,85 @@ export default function BackupPage() {
           <div className="flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 block">
-                ARQUITECTURA DE PRODUCCIÓN
+                ARQUITECTURA DE PRODUCCIÓN & SERVIDOR
               </span>
               <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                PostgreSQL & Respaldo Automático (Dokploy)
+                Persistencia en Servidor & PostgreSQL
               </h3>
             </div>
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 font-mono">
-              Auto-Backup Daily
+            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border font-mono ${
+              dbEngine === 'POSTGRESQL'
+                ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'
+                : 'bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-200 dark:border-teal-500/20'
+            }`}>
+              {dbEngine === 'POSTGRESQL' ? '🟢 PostgreSQL Activo' : '🟢 Disco Servidor Activo'}
             </span>
           </div>
 
-          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-            En el servidor VPS con Dokploy, se ejecuta un contenedor de **PostgreSQL 16** junto con un servicio de **backup automático diario (Cron a las 2:00 AM)** que genera volcados `.sql.gz` comprimidos con retención de 30 días en volúmenes Docker independientes.
-          </p>
+          {/* Banner de estado real */}
+          <div className={`p-4 rounded-2xl border text-xs leading-relaxed space-y-1.5 ${
+            dbEngine === 'POSTGRESQL'
+              ? 'bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/40 text-emerald-900 dark:text-emerald-300'
+              : 'bg-teal-50/60 dark:bg-teal-950/30 border-teal-200 dark:border-teal-800/40 text-teal-900 dark:text-teal-300'
+          }`}>
+            <div className="font-bold flex items-center gap-1.5">
+              <Sparkles size={14} />
+              <span>
+                {dbEngine === 'POSTGRESQL'
+                  ? 'Base de Datos PostgreSQL Conectada'
+                  : 'Persistencia Garantizada en Servidor (data/praxis_db_store.json)'}
+              </span>
+            </div>
+            <p className="text-[11px] opacity-90">
+              {dbEngine === 'POSTGRESQL'
+                ? 'La plataforma está sincronizada directamente con la tabla praxis_entity_store en tu base de datos PostgreSQL 16 con copias de seguridad continuas.'
+                : 'Toda empresa, visita, prospecto y planilla creada se escribe de inmediato en el disco del servidor. No requieres una base de datos externa obligatoria. Si deseas enlazar PostgreSQL en cualquier momento, el sistema migrará tus datos existentes automáticamente.'}
+            </p>
+          </div>
 
-          {/* Environment variables block */}
+          {/* Environment variables block 1: Dokploy */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-400">
-                Variables de Entorno para Dokploy:
+                Opción A: PostgreSQL Interno (Dokploy / Docker Compose):
               </label>
               <button
                 onClick={copyPostgresEnv}
                 className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
               >
-                <Copy size={12} /> {copiedEnv ? '¡Copiado!' : 'Copiar Variables'}
+                <Copy size={12} /> {copiedEnv ? '¡Copiado!' : 'Copiar Variables Dokploy'}
               </button>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-slate-900 text-slate-200 font-mono text-[11px] leading-relaxed overflow-x-auto border border-slate-800 shadow-inner">
-              <p className="text-emerald-400"># Configuración PostgreSQL Dokploy</p>
+              <p className="text-emerald-400"># Configuración PostgreSQL Dokploy / VPS</p>
               <p>DATABASE_URL=postgresql://wappy_admin:WappySecure2026!@postgres:5432/wappy_arl_db</p>
               <p>POSTGRES_DB=wappy_arl_db</p>
               <p>POSTGRES_USER=wappy_admin</p>
               <p>POSTGRES_PASSWORD=WappySecure2026!</p>
-              <p className="text-amber-400 mt-2"># Respaldo Automático Diario</p>
+              <p className="text-amber-400 mt-1"># Backup Diario Automático</p>
               <p>BACKUP_CRON_SCHEDULE="0 2 * * *"</p>
               <p>BACKUP_RETENTION_DAYS=30</p>
+            </div>
+          </div>
+
+          {/* Environment variables block 2: Cloud Postgres (Supabase / Neon) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-bold uppercase text-slate-600 dark:text-slate-400">
+                Opción B: PostgreSQL en la Nube Gratuito (Supabase / Neon):
+              </label>
+              <button
+                onClick={copyCloudPostgresEnv}
+                className="text-[11px] font-semibold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1"
+              >
+                <Copy size={12} /> {copiedCloudEnv ? '¡Copiado!' : 'Copiar URL Cloud'}
+              </button>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-slate-900 text-slate-200 font-mono text-[11px] leading-relaxed overflow-x-auto border border-slate-800 shadow-inner">
+              <p className="text-teal-400"># En Dokploy o Vercel, sólo agrega una variable:</p>
+              <p className="text-slate-300">DATABASE_URL="postgresql://postgres:[TU-PASSWORD]@db.[PROJECT].supabase.co:5432/postgres"</p>
             </div>
           </div>
 

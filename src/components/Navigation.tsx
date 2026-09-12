@@ -51,6 +51,7 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
   const [currentRole, setCurrentRole] = useState<UserRole>('ADMIN');
   const [isOnline, setIsOnline] = useState(true);
   const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
+  const [dbEngine, setDbEngine] = useState<'POSTGRESQL' | 'SERVER_FILE_STORAGE' | 'LOCAL_CACHE'>('SERVER_FILE_STORAGE');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -90,6 +91,7 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
     const triggerSync = async () => {
       const res = await syncFromServer();
       setIsDbConnected(res.connected);
+      if (res.engine) setDbEngine(res.engine);
     };
     triggerSync();
     const syncTimer = setInterval(triggerSync, 25000);
@@ -470,15 +472,58 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
 
           {(!isCollapsed || mobileMenuOpen) ? (
             <div className="flex items-center justify-between px-2 text-[11px] text-slate-500 dark:text-slate-400">
-              <span className={`flex items-center gap-1.5 font-medium ${isDbConnected ? 'text-emerald-600 dark:text-emerald-400' : isOnline ? 'text-sky-600 dark:text-sky-400' : 'text-amber-500'}`}>
-                <span className={`h-2 w-2 rounded-full ${isDbConnected ? 'bg-emerald-500 animate-pulse' : isOnline ? 'bg-sky-500' : 'bg-amber-500'}`} />
-                {isDbConnected ? 'PostgreSQL Activo' : isOnline ? 'Caché Local' : 'Offline'}
+              <span className={`flex items-center gap-1.5 font-medium ${
+                dbEngine === 'POSTGRESQL'
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : isDbConnected
+                  ? 'text-teal-600 dark:text-teal-400'
+                  : isOnline
+                  ? 'text-sky-600 dark:text-sky-400'
+                  : 'text-amber-500'
+              }`}>
+                <span className={`h-2 w-2 rounded-full ${
+                  dbEngine === 'POSTGRESQL'
+                    ? 'bg-emerald-500 animate-pulse'
+                    : isDbConnected
+                    ? 'bg-teal-500 animate-pulse'
+                    : isOnline
+                    ? 'bg-sky-500'
+                    : 'bg-amber-500'
+                }`} />
+                {dbEngine === 'POSTGRESQL'
+                  ? 'PostgreSQL Activo'
+                  : isDbConnected
+                  ? 'Servidor Persistente'
+                  : isOnline
+                  ? 'Caché Local'
+                  : 'Offline'}
               </span>
-              <span className="font-mono text-[10px] text-slate-400">Dokploy</span>
+              <span className="font-mono text-[10px] text-slate-400">
+                {dbEngine === 'POSTGRESQL' ? 'PostgreSQL' : 'Disco Servidor'}
+              </span>
             </div>
           ) : (
-            <div className="flex justify-center py-0.5" title={isDbConnected ? 'PostgreSQL Conectado y Sincronizado' : isOnline ? 'Modo Local / Esperando BD' : 'Modo Offline PWA'}>
-              <span className={`h-2.5 w-2.5 rounded-full ${isDbConnected ? 'bg-emerald-500 animate-pulse' : isOnline ? 'bg-sky-500' : 'bg-amber-500'}`} />
+            <div
+              className="flex justify-center py-0.5"
+              title={
+                dbEngine === 'POSTGRESQL'
+                  ? 'PostgreSQL 16 Conectado y Sincronizado'
+                  : isDbConnected
+                  ? 'Almacenamiento Persistente en Servidor (data/praxis_db_store.json)'
+                  : isOnline
+                  ? 'Modo Local / Esperando Servidor'
+                  : 'Modo Offline PWA'
+              }
+            >
+              <span className={`h-2.5 w-2.5 rounded-full ${
+                dbEngine === 'POSTGRESQL'
+                  ? 'bg-emerald-500 animate-pulse'
+                  : isDbConnected
+                  ? 'bg-teal-500 animate-pulse'
+                  : isOnline
+                  ? 'bg-sky-500'
+                  : 'bg-amber-500'
+              }`} />
             </div>
           )}
         </div>

@@ -1,24 +1,18 @@
 import { NextResponse } from 'next/server';
-import { getAllEntities, saveEntity, isDbConnected, initDb } from '@/lib/db';
+import { getAllEntities, saveEntity, isDbConnected, getDbEngine, initDb } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const isConnected = await isDbConnected();
-    if (!isConnected) {
-      return NextResponse.json({
-        success: false,
-        connected: false,
-        message: 'PostgreSQL no configurado o no disponible en DATABASE_URL',
-        data: {},
-      });
-    }
-
-    const { data } = await getAllEntities();
+    const { connected, engine, data } = await getAllEntities();
     return NextResponse.json({
       success: true,
-      connected: true,
+      connected,
+      engine,
+      message: engine === 'POSTGRESQL'
+        ? 'Base de datos PostgreSQL en línea'
+        : 'Almacenamiento persistente en servidor activo (Disco JSON)',
       data,
     });
   } catch (error: any) {
@@ -37,18 +31,10 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const engine = await getDbEngine();
 
     // Soporte para guardado en lote (batch) o por entidad individual
     if (body.batch && typeof body.batch === 'object') {
-      const isConnected = await isDbConnected();
-      if (!isConnected) {
-        return NextResponse.json({
-          success: false,
-          connected: false,
-          message: 'PostgreSQL no disponible para guardar en lote',
-        });
-      }
-
       for (const [key, val] of Object.entries(body.batch)) {
         await saveEntity(key, val);
       }
@@ -56,6 +42,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         connected: true,
+        engine,
         savedBatch: Object.keys(body.batch),
       });
     }
@@ -72,6 +59,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: saved,
       connected: saved,
+      engine,
       key,
     });
   } catch (error: any) {
@@ -85,3 +73,4 @@ export async function POST(request: Request) {
     );
   }
 }
+
