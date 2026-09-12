@@ -526,6 +526,14 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
               }`} />
             </div>
           )}
+
+          {(!isCollapsed || mobileMenuOpen) && (
+            <div className="pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 text-center">
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                By <span className="font-bold text-blue-600 dark:text-blue-400">Wappy IA</span>
+              </span>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -600,9 +608,19 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
         </header>
 
         {/* Dynamic Page Content with Fluid Responsive Padding */}
-        <div className="flex-1 p-3 sm:p-5 md:p-6 lg:p-7 pb-24 md:pb-8 max-w-[1600px] w-full mx-auto animate-fade-in space-y-4 sm:space-y-6 print:p-0 print:m-0 print:max-w-none print:w-full print:space-y-0">
+        <div className="flex-1 p-3 sm:p-5 md:p-6 lg:p-7 pb-6 max-w-[1600px] w-full mx-auto animate-fade-in space-y-4 sm:space-y-6 print:p-0 print:m-0 print:max-w-none print:w-full print:space-y-0">
           {children}
         </div>
+
+        {/* Small Footer */}
+        <footer className="py-3 px-4 border-t border-slate-200/60 dark:border-slate-800/60 text-center text-xs text-slate-400 dark:text-slate-500 no-print print:hidden flex items-center justify-center gap-1.5 shrink-0 mb-16 md:mb-0">
+          <span>PRAXIS Prevención y Seguros &copy; {new Date().getFullYear()}</span>
+          <span className="opacity-40">•</span>
+          <span className="font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1">
+            By <span className="text-blue-600 dark:text-blue-400 font-bold">Wappy IA</span>
+            <Sparkles size={12} className="text-blue-500 inline" />
+          </span>
+        </footer>
       </main>
 
       {/* Mobile Bottom Navigation Bar (App Style for Cellphones) */}
