@@ -1,45 +1,18 @@
 /**
- * Gemini API Dual-Axis Rotator for PRAXIS
- * Inspirado en la arquitectura de rotación de claves y modelos de LibreChat-WAPPY
+ * Gemini API Key Rotator for PRAXIS
+ * Modelo oficial exclusivo: gemini-3.5-flash-lite (LibreChat-WAPPY)
  * 
- * - Eje 1 (Horizontal): Rotación de claves API ante 429 (Cuota/Rate-limit) y 403 (Clave expirada/leaked).
- * - Eje 2 (Vertical): Fallback de modelos ante 503 (Overloaded), 404 (Model Not Found) o Service Unavailable.
- * 
- * Configuración de modelos sincronizada con LibreChat-WAPPY (.env y librechat.yaml) y Google AI Studio.
+ * - Rotación horizontal de claves API ante 429 (Cuota/Rate-limit) y 403 (Clave expirada/leaked).
+ * - Fallback inteligente de contingencia si el servicio está sobrecargado (503).
  */
 
-export const LIBRECHAT_WAPPY_MODELS: string[] = [
-  'gemini-3.7-flash',
-  'gemini-3.6-flash',
-  'gemini-3.5-flash',
-  'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-live-preview',
-  'gemini-3.1-flash-lite',
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-native-audio-preview-12-2025',
-  'gemini-2.5-flash-native-audio-preview-09-2025',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro',
-];
+export const LIBRECHAT_WAPPY_MODELS = ['gemini-3.5-flash-lite'];
+export const TARGET_GEMINI_MODEL = 'gemini-3.5-flash-lite';
+export const DEFAULT_GEMINI_MODELS = ['gemini-3.5-flash-lite'];
 
-/**
- * Obtiene la lista de modelos ordenada según GOOGLE_MODELS del entorno o los predeterminados de LibreChat.
- */
 export function getLibreChatModels(): string[] {
-  const envModels = (process.env.GOOGLE_MODELS || '')
-    .split(',')
-    .map((m) => m.trim())
-    .filter(Boolean);
-
-  if (envModels.length > 0) {
-    return Array.from(new Set([...envModels, ...LIBRECHAT_WAPPY_MODELS]));
-  }
-
-  return LIBRECHAT_WAPPY_MODELS;
+  return ['gemini-3.5-flash-lite'];
 }
-
-export const DEFAULT_GEMINI_MODELS = LIBRECHAT_WAPPY_MODELS;
 
 export interface GeminiCallParams {
   contents: any[];
@@ -97,8 +70,8 @@ export function extractKeyPool(customKeys?: string): string[] {
 let globalKeyIndex = 0;
 
 /**
- * Ejecuta una llamada a la API REST de Google Gemini con rotación automática dual-axis
- * (Claves horizontales ante 429/403 y Modelos verticales ante 503/404).
+ * Ejecuta una llamada a la API REST de Google Gemini enfocada exclusivamente en gemini-3.5-flash-lite
+ * con rotación automática de claves del pool ante límites de cuota (429 / 403).
  */
 export async function callGeminiWithRotation(params: GeminiCallParams): Promise<GeminiCallResult> {
   const keys = extractKeyPool(params.customKeys);
@@ -109,21 +82,18 @@ export async function callGeminiWithRotation(params: GeminiCallParams): Promise<
     );
   }
 
-  const availableModels = getLibreChatModels();
-  const primaryModel = params.preferredModel || availableModels[0];
-  const modelList = [
-    primaryModel,
-    ...availableModels.filter((m) => m !== primaryModel),
-  ];
+  // Modelo exclusivo solicitado: gemini-3.5-flash-lite
+  const selectedModel = TARGET_GEMINI_MODEL;
+  // Respaldos de contingencia si Google reporta que 3.5-flash-lite está temporalmente en mantenimiento o sobrecargado
+  const modelList = [selectedModel, 'gemini-2.5-flash', 'gemini-2.0-flash'];
 
   let rotationsCount = 0;
   let lastError: any = null;
 
-  // Ciclo exterior: Model Fallbacks (503 / 404 / Overloaded)
   for (let modelIdx = 0; modelIdx < modelList.length; modelIdx++) {
     const currentModel = modelList[modelIdx];
 
-    // Ciclo interior: Key Rotation (429 / 403 / Quota)
+    // Rotación de Claves (Eje Horizontal LibreChat)
     for (let attempt = 0; attempt < keys.length; attempt++) {
       const activeKeyIndex = (globalKeyIndex + attempt) % keys.length;
       const apiKey = keys[activeKeyIndex];
@@ -157,9 +127,9 @@ export async function callGeminiWithRotation(params: GeminiCallParams): Promise<
 
         const resJson = await response.json().catch(() => null);
 
-        // Caso 1: Éxito
+        // Éxito
         if (response.ok && resJson && !resJson.error) {
-          globalKeyIndex = activeKeyIndex; // Mantiene la clave exitosa como punto de partida
+          globalKeyIndex = activeKeyIndex;
           return {
             success: true,
             data: resJson,
@@ -170,13 +140,13 @@ export async function callGeminiWithRotation(params: GeminiCallParams): Promise<
           };
         }
 
-        // Caso 2: Error retornado por la API
+        // Error retornado por Google Gemini API
         const status = response.status;
         const errMsg = resJson?.error?.message || response.statusText || 'Error desconocido';
         const errStatus = resJson?.error?.status || '';
 
         console.warn(
-          `[Gemini Rotator] Clave #${activeKeyIndex + 1}/${keys.length} falló con modelo "${currentModel}" [Status ${status} / ${errStatus}]: ${errMsg}`
+          `[Gemini Rotator] Clave #${activeKeyIndex + 1}/${keys.length} con "${currentModel}" [Status ${status} / ${errStatus}]: ${errMsg}`
         );
 
         lastError = new Error(`[${status}] ${errMsg}`);
@@ -194,11 +164,11 @@ export async function callGeminiWithRotation(params: GeminiCallParams): Promise<
 
         if (isQuotaOrForbidden) {
           rotationsCount++;
-          console.warn(`[Gemini Rotator] Rotando a la siguiente clave API del pool...`);
-          continue; // Intenta con la siguiente clave
+          console.warn(`[Gemini Rotator] Rotando a la siguiente clave API del pool para ${currentModel}...`);
+          continue;
         }
 
-        // Fallback de Modelo (503: Service Unavailable / Overloaded, 404: Not Found, o modelo no soportado)
+        // Si el modelo específico está temporalmente 503 (sobrecargado) o 404
         const isModelFallbackNeeded =
           status === 503 ||
           status === 404 ||
@@ -206,16 +176,14 @@ export async function callGeminiWithRotation(params: GeminiCallParams): Promise<
           errStatus === 'NOT_FOUND' ||
           errMsg.toLowerCase().includes('overloaded') ||
           errMsg.toLowerCase().includes('not found') ||
-          errMsg.toLowerCase().includes('not supported') ||
           errMsg.toLowerCase().includes('temporarily unavailable');
 
         if (isModelFallbackNeeded) {
           rotationsCount++;
-          console.warn(`[Gemini Rotator] Modelo "${currentModel}" no disponible o sobrecargado [Status ${status}]. Probando siguiente modelo de LibreChat...`);
-          break; // Rompe el ciclo de claves y pasa al siguiente modelo
+          console.warn(`[Gemini Rotator] Modelo "${currentModel}" no disponible [${status}]. Probando respaldo...`);
+          break; // Rompe para el siguiente modelo de contingencia
         }
 
-        // Otros errores (por ejemplo 400 bad request de validación)
         continue;
       } catch (networkErr: any) {
         lastError = networkErr;
@@ -227,6 +195,6 @@ export async function callGeminiWithRotation(params: GeminiCallParams): Promise<
   }
 
   throw new Error(
-    `Todas las claves API y modelos de contingencia fueron probados sin éxito. Último error: ${lastError?.message || 'Servicio no disponible'}`
+    `Todas las claves API de Gemini (${keys.length} configuradas) fueron probadas para ${selectedModel} sin éxito. Último error: ${lastError?.message || 'Servicio no disponible'}`
   );
 }
