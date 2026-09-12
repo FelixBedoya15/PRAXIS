@@ -242,11 +242,14 @@ export default function DashboardPage() {
     };
   }).filter((d) => d.value > 0);
 
-  // Health & Medicine Metrics
+  // Health & Accident Metrics (Resolución 0312 de 2019 / Medicina Laboral)
   const totalDaysLost = medicalRecords.reduce((sum, m) => sum + (m.daysLost || 0), 0);
   const accidentesCount = medicalRecords.filter((m) => m.incidentType === 'ACCIDENTE_TRABAJO').length;
   const examenesCount = medicalRecords.filter((m) => m.incidentType === 'EXAMEN_MEDICO').length;
-  const pveActiveCount = medicalRecords.filter((m) => m.pveProgram && m.pveProgram !== 'NINGUNO').length;
+  
+  // IFAT (Índice de Frecuencia AT - Res. 0312 de 2019): (No. AT / Total Trabajadores) * 100
+  const totalWorkers = clients.reduce((s, c) => s + (c.employeeCount || 0), 0) || 1;
+  const ifat = ((accidentesCount / totalWorkers) * 100).toFixed(1);
 
   // Res 0312 Compliance Metrics
   const clientsWithScore = clients.filter((c) => c.standardsScore !== undefined);
@@ -445,9 +448,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Row 2: Dynamic Interactive Charts (Recharts) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
         {/* Dynamic Chart 1: Participación y Comisiones por Aseguradora ARL */}
-        <div className="lg:col-span-2 p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div className="xl:col-span-2 p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
@@ -566,9 +569,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Row 3: Comprehensive Multi-Module Intelligence */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Left 2 Cols: Operational SST Compliance & Medical Surveillance */}
-        <div className="lg:col-span-2 space-y-5">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        {/* Left 2 Cols: Operational SST Compliance & Medical Accidents */}
+        <div className="xl:col-span-2 space-y-5">
           {/* Module 1: Estándares Mínimos Res. 0312 de 2019 */}
           <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -604,48 +607,50 @@ export default function DashboardPage() {
                   ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
                   : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800';
 
+                const ratingLabel = isEvaluated
+                  ? (client.standardsRating ? client.standardsRating.replace(/_/g, ' ') : score >= 86 ? 'Aceptable' : score >= 60 ? 'Moderadamente Aceptable' : 'Crítico')
+                  : 'Sin auditar';
+
                 return (
                   <div
                     key={client.id}
-                    className="p-3 sm:p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                    className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-2.5 transition-all hover:border-slate-300 dark:hover:border-slate-700"
                   >
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <strong className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                        <strong className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white leading-snug">
                           {client.name}
                         </strong>
-                        <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 shrink-0">
-                          (NIT: {client.nit})
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
+                          NIT: {client.nit}
                         </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                        <span>{client.economicActivity}</span>
-                        <span>•</span>
-                        <span>{client.standardsCount || 60} Estándares</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 sm:w-60 shrink-0">
-                      <div className="flex-1">
-                        <div className="flex justify-between text-[10px] font-mono font-bold mb-1">
-                          <span className="text-slate-500">Calificación:</span>
-                          <span className="text-slate-900 dark:text-white">{isEvaluated ? `${score}%` : 'Pendiente'}</span>
-                        </div>
-                        <div className="h-2 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${statusColor} rounded-full transition-all duration-500`}
-                            style={{ width: `${isEvaluated ? score : 0}%` }}
-                          />
-                        </div>
                       </div>
 
                       <span
-                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border shrink-0 ${
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border shrink-0 self-start sm:self-auto capitalize ${
                           isEvaluated ? statusBadge : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700'
                         }`}
                       >
-                        {isEvaluated ? client.standardsRating || 'Aceptable' : 'Sin auditar'}
+                        {ratingLabel}
                       </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                      <span className="truncate max-w-full sm:max-w-md">{client.economicActivity}</span>
+                      <span className="shrink-0 font-medium">{client.standardsCount || 60} Estándares Res. 0312</span>
+                    </div>
+
+                    <div className="space-y-1 pt-0.5">
+                      <div className="flex justify-between items-center text-[10px] font-mono font-bold">
+                        <span className="text-slate-500">Calificación SG-SST:</span>
+                        <span className="text-slate-900 dark:text-white">{isEvaluated ? `${score}%` : 'Pendiente por auditar'}</span>
+                      </div>
+                      <div className="h-2 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${statusColor} rounded-full transition-all duration-500`}
+                          style={{ width: `${isEvaluated ? score : 0}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
                 );
@@ -653,64 +658,64 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Module 2: Vigilancia Médica & Salud Laboral */}
+          {/* Module 2: Siniestralidad Laboral & Ausentismo Médico (Res. 0312) */}
           <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
-                  <Stethoscope size={13} /> Medicina Laboral & Ausentismo
+                  <Stethoscope size={13} /> Medicina del Trabajo & Siniestralidad
                 </span>
                 <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
-                  Programas de Vigilancia Epidemiológica & Accidentalidad
+                  Accidentalidad Laboral (FURAT) & Ausentismo Médico
                 </h3>
               </div>
               <Link
                 href="/medico"
-                className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1"
+                className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 self-start sm:self-auto"
               >
                 Módulo Médico ➔
               </Link>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3 rounded-2xl bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 space-y-1">
-                <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase block">
-                  Días Perdidos
+            <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="p-3.5 rounded-2xl bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 space-y-1">
+                <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase block tracking-wider">
+                  Días Incapacidad
                 </span>
-                <div className="text-lg sm:text-xl font-black text-rose-700 dark:text-rose-300 font-mono">
-                  {totalDaysLost} días
+                <div className="text-base sm:text-xl font-black text-rose-700 dark:text-rose-300 font-mono">
+                  {totalDaysLost} <span className="text-xs font-normal">días</span>
                 </div>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Ausentismo total</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">Ausentismo por contingencia</span>
               </div>
 
-              <div className="p-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 space-y-1">
-                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase block">
-                  FURAT Radicados
+              <div className="p-3.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 space-y-1">
+                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase block tracking-wider">
+                  Accidentes FURAT
                 </span>
-                <div className="text-lg sm:text-xl font-black text-amber-700 dark:text-amber-300 font-mono">
-                  {accidentesCount} casos
+                <div className="text-base sm:text-xl font-black text-amber-700 dark:text-amber-300 font-mono">
+                  {accidentesCount} <span className="text-xs font-normal">casos</span>
                 </div>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Accidentes de trabajo</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">Radicados ante ARL</span>
               </div>
 
-              <div className="p-3 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 space-y-1">
-                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase block">
+              <div className="p-3.5 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 space-y-1">
+                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase block tracking-wider">
                   Exámenes Ocup.
                 </span>
-                <div className="text-lg sm:text-xl font-black text-blue-700 dark:text-blue-300 font-mono">
-                  {examenesCount} registros
+                <div className="text-base sm:text-xl font-black text-blue-700 dark:text-blue-300 font-mono">
+                  {examenesCount} <span className="text-xs font-normal">reg.</span>
                 </div>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Ingreso / Egreso / Per.</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">Ingreso / Egreso / Per.</span>
               </div>
 
-              <div className="p-3 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 space-y-1">
-                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase block">
-                  PVE Activos
+              <div className="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 space-y-1">
+                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase block tracking-wider">
+                  Frecuencia (IFAT)
                 </span>
-                <div className="text-lg sm:text-xl font-black text-indigo-700 dark:text-indigo-300 font-mono">
-                  {pveActiveCount} casos
+                <div className="text-base sm:text-xl font-black text-emerald-700 dark:text-emerald-300 font-mono">
+                  {ifat}%
                 </div>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 block">Osteomuscular / Psico</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">Índice Res. 0312</span>
               </div>
             </div>
           </div>
@@ -750,17 +755,17 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={stg.key}
-                    className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-1.5"
+                    className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-2"
                   >
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200">
+                    <div className="flex flex-wrap items-center justify-between gap-1 text-xs">
+                      <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200 min-w-0">
                         <span className={`w-2.5 h-2.5 rounded-full ${stg.color} shrink-0`} />
-                        <span>{stg.label}</span>
-                        <span className="text-[10px] font-normal text-slate-500">
-                          ({stageLeads.length} {stageLeads.length === 1 ? 'prospecto' : 'prospectos'})
+                        <span className="truncate">{stg.label}</span>
+                        <span className="text-[10px] font-normal text-slate-500 shrink-0">
+                          ({stageLeads.length})
                         </span>
                       </div>
-                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs">
+                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs shrink-0">
                         {formatCOP(stageCommission)}/m
                       </span>
                     </div>
@@ -794,15 +799,15 @@ export default function DashboardPage() {
                 .map((rec) => (
                   <div
                     key={rec.id}
-                    className="p-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 space-y-1"
+                    className="p-3 rounded-2xl bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 space-y-1.5"
                   >
-                    <div className="flex justify-between items-start gap-2">
-                      <strong className="text-slate-900 dark:text-white font-bold truncate">{rec.clientName}</strong>
-                      <span className="font-mono text-[9px] sm:text-[10px] font-bold text-rose-600 dark:text-rose-400 shrink-0 px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950 border border-rose-200 dark:border-rose-800">
+                    <div className="flex flex-wrap justify-between items-start gap-1">
+                      <strong className="text-slate-900 dark:text-white font-bold text-xs">{rec.clientName}</strong>
+                      <span className="font-mono text-[9px] font-bold text-rose-600 dark:text-rose-400 shrink-0 px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950 border border-rose-200 dark:border-rose-800">
                         {rec.status}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2">
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
                       {rec.notes || `Planilla ${rec.month} presenta novedad en recaudo de comisión.`}
                     </p>
                   </div>
@@ -811,15 +816,15 @@ export default function DashboardPage() {
               {leads.slice(0, 2).map((l) => (
                 <div
                   key={l.id}
-                  className="p-3 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 space-y-1"
+                  className="p-3 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 space-y-1.5"
                 >
-                  <div className="flex justify-between items-start gap-2">
-                    <strong className="text-slate-900 dark:text-white font-bold truncate">{l.name}</strong>
+                  <div className="flex flex-wrap justify-between items-start gap-1">
+                    <strong className="text-slate-900 dark:text-white font-bold text-xs">{l.name}</strong>
                     <span className="font-mono text-[10px] font-bold text-blue-600 dark:text-blue-400 shrink-0">
                       {formatDateLabel(l.nextFollowUpDate)}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-1">
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
                     {l.nextFollowUpAction}
                   </p>
                 </div>

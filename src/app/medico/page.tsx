@@ -1111,7 +1111,7 @@ export default function IndicadoresSSTPage() {
 
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block">
-                VIGILANCIA EPIDEMIOLÓGICA & FURAT
+                MEDICINA LABORAL & FURAT
               </span>
               <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
                 Registrar Novedad de Accidentalidad o Ausentismo
