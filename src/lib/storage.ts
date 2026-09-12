@@ -15,6 +15,7 @@ export const STORAGE_KEYS = {
   USER_PROFILES: 'wappy_user_profiles_v1',
   ACTIVE_USER_ID: 'wappy_active_user_id_v1',
   LEADS: 'wappy_leads_v2',
+  GEMINI_KEYS: 'praxis_gemini_keys_v1',
 };
 
 // Limpia llaves de datos obsoletas de versiones previas
@@ -422,3 +423,17 @@ export const saveStoredActiveUserProfile = (updatedUser: UserProfile) => {
   saveStoredUserProfiles(updated);
   saveStoredActiveUserId(updatedUser.id);
 };
+
+export const getStoredGeminiKeys = (): string => {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem(STORAGE_KEYS.GEMINI_KEYS) || '';
+};
+
+export const saveStoredGeminiKeys = (keysString: string) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEYS.GEMINI_KEYS, keysString);
+    window.dispatchEvent(new CustomEvent('praxis_gemini_keys_updated'));
+    pushToServer(STORAGE_KEYS.GEMINI_KEYS, keysString);
+  }
+};
+

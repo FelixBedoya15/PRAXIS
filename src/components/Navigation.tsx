@@ -34,6 +34,7 @@ import {
   Activity,
   Settings,
   Edit2,
+  Key,
 } from 'lucide-react';
 import { UserRole, AgencyProfile, UserProfile } from '@/types';
 import {
@@ -43,7 +44,7 @@ import {
   getStoredUserProfiles,
   syncFromServer,
 } from '@/lib/storage';
-import ProfileModal from './ProfileModal';
+import ProfileModal, { ProfileModalTab } from './ProfileModal';
 
 export default function Navigation({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -59,9 +60,9 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
   const [activeUser, setActiveUser] = useState<UserProfile>(getStoredActiveUserProfile());
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>(getStoredUserProfiles());
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
-  const [profileModalTab, setProfileModalTab] = useState<'USER' | 'AGENCY' | 'LOGO'>('USER');
+  const [profileModalTab, setProfileModalTab] = useState<ProfileModalTab>('USER');
 
-  const openProfileModal = (tab: 'USER' | 'AGENCY' | 'LOGO' = 'USER') => {
+  const openProfileModal = (tab: ProfileModalTab = 'USER') => {
     setProfileModalTab(tab);
     setShowProfileModal(true);
   };
@@ -115,11 +116,19 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
     const savedCollapsed = localStorage.getItem('wappy_sidebar_collapsed');
     if (savedCollapsed === 'true') setIsCollapsed(true);
 
+    const handleOpenProfileEvent = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const targetTab = customEvent?.detail?.tab || 'USER';
+      openProfileModal(targetTab);
+    };
+    window.addEventListener('praxis_open_profile', handleOpenProfileEvent);
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('praxis_profile_updated', refreshProfiles);
       window.removeEventListener('praxis_data_synced', refreshProfiles);
+      window.removeEventListener('praxis_open_profile', handleOpenProfileEvent);
       window.removeEventListener('focus', triggerSync);
       clearInterval(syncTimer);
     };
@@ -155,52 +164,34 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
       roles: ['ADMIN', 'ANALISTA_FINANCIERO', 'INGENIERO_SST', 'MEDICO_LABORAL', 'ASESOR_COMERCIAL'],
     },
     {
-      href: '/arl-config',
-      label: 'Directorio y Matriz ARL',
-      icon: Shield,
-      roles: ['ADMIN', 'ANALISTA_FINANCIERO', 'ASESOR_COMERCIAL'],
-    },
-    {
-      href: '/comisiones',
-      label: 'Motor Comisiones & PILA',
-      icon: Calculator,
-      roles: ['ADMIN', 'ANALISTA_FINANCIERO'],
-    },
-    {
       href: '/clientes',
-      label: 'CRM & Pipeline Leads',
+      label: 'Empresas & Leads',
       icon: Building2,
       roles: ['ADMIN', 'ANALISTA_FINANCIERO', 'INGENIERO_SST', 'ASESOR_COMERCIAL'],
     },
     {
+      href: '/comisiones',
+      label: 'PILA & Comisiones',
+      icon: Calculator,
+      roles: ['ADMIN', 'ANALISTA_FINANCIERO'],
+    },
+    {
       href: '/campo-sst',
-      label: 'Módulo de Campo SST',
+      label: 'Campo SST',
       icon: HardHat,
       roles: ['ADMIN', 'INGENIERO_SST'],
     },
     {
       href: '/medico',
-      label: 'Indicadores & Ausentismo SST',
+      label: 'Módulo Médico & AT',
       icon: Activity,
       roles: ['ADMIN', 'ANALISTA_FINANCIERO', 'INGENIERO_SST', 'MEDICO_LABORAL', 'ASESOR_COMERCIAL'],
     },
     {
-      href: '/rui-mintrabajo',
-      label: 'Registro RUI MinTrabajo',
-      icon: FileCheck,
-      roles: ['ADMIN', 'ANALISTA_FINANCIERO', 'INGENIERO_SST'],
-    },
-    {
       href: '/wappy-ia',
-      label: 'PRAXIS IA & WhatsApp',
+      label: 'PRAXIS IA 🤖',
       icon: Bot,
       roles: ['ADMIN', 'ANALISTA_FINANCIERO', 'INGENIERO_SST', 'MEDICO_LABORAL', 'ASESOR_COMERCIAL'],
-    },
-    {
-      href: '/backup',
-      label: 'Base de Datos & Backup',
-      icon: Database,
-      roles: ['ADMIN', 'ANALISTA_FINANCIERO'],
     },
   ];
 
@@ -367,6 +358,49 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
                   </option>
                 ))}
               </select>
+
+              {/* Botones de Configuración desde el Perfil (General, RUI, BD y Claves IA) */}
+              <div className="grid grid-cols-2 gap-1.5 pt-1.5 border-t border-slate-200/80 dark:border-slate-800/80">
+                <button
+                  type="button"
+                  onClick={() => openProfileModal('GENERAL')}
+                  className="px-2 py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-blue-600 hover:text-white border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow-sm"
+                  title="Configuración General: Directorio y Matriz ARL, Motor PILA"
+                >
+                  <Shield size={11} className="text-blue-500" />
+                  <span>General</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openProfileModal('RUI')}
+                  className="px-2 py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-emerald-600 hover:text-white border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow-sm"
+                  title="Registro RUI MinTrabajo"
+                >
+                  <FileCheck size={11} className="text-emerald-500" />
+                  <span>Reg. RUI</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openProfileModal('DATABASE')}
+                  className="px-2 py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-indigo-600 hover:text-white border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow-sm"
+                  title="Base de Datos & Sincronización PostgreSQL"
+                >
+                  <Database size={11} className="text-indigo-500" />
+                  <span>Base Datos</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openProfileModal('AI_KEYS')}
+                  className="px-2 py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-amber-600 hover:text-white border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold transition-all flex items-center justify-center gap-1 shadow-sm"
+                  title="Pool de Claves Gemini (Rotación Dual-Axis)"
+                >
+                  <Key size={11} className="text-amber-500" />
+                  <span>Claves IA</span>
+                </button>
+              </div>
             </div>
           ) : (
             <div className="flex justify-center">

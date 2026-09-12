@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import {
   Bot,
   MessageSquare,
@@ -10,65 +11,69 @@ import {
   Calculator,
   CheckCircle2,
   Clock,
-  Phone,
   Building2,
   Users,
   AlertTriangle,
   RotateCcw,
-  Copy,
-  Check,
-  Zap
+  Zap,
+  Key,
+  ExternalLink,
+  ArrowRight,
+  HardHat,
+  Stethoscope,
+  FileSpreadsheet,
+  Layers,
+  HelpCircle,
+  AlertCircle
 } from 'lucide-react';
-import { getStoredClients, getStoredWhatsAppMessages, saveStoredWhatsAppMessages, getStoredARLs } from '@/lib/storage';
-import { ClientCompany, WhatsAppMessage, ARLCompany } from '@/types';
+import {
+  getStoredClients,
+  saveStoredClients,
+  getStoredLeads,
+  saveStoredLeads,
+  getStoredFieldVisits,
+  saveStoredFieldVisits,
+  getStoredMedicalRecords,
+  saveStoredMedicalRecords,
+  getStoredPilaRecords,
+  saveStoredPilaRecords,
+  getStoredWhatsAppMessages,
+  saveStoredWhatsAppMessages,
+  getStoredARLs,
+  getStoredGeminiKeys,
+} from '@/lib/storage';
+import {
+  ClientCompany,
+  LeadProspect,
+  FieldVisit,
+  MedicalRecord,
+  PilaRecord,
+  WhatsAppMessage,
+  ARLCompany,
+} from '@/types';
+import { ToolExecutionResult } from '@/lib/aiTools';
+import { extractKeyPool } from '@/lib/geminiRotator';
 
 interface ChatMessage {
   id: string;
   sender: 'USER' | 'AI';
   text: string;
   timestamp: string;
+  actionExecuted?: ToolExecutionResult;
+  modelUsed?: string;
+  rotationsPerformed?: number;
+  isFallback?: boolean;
 }
-
-const KNOWLEDGE_RESPONSES: Record<string, string> = {
-  iva: `💡 **Exclusión de IVA en Comisiones ARL (Estatuto Tributario & Sentencia C-049 de 2022):**
-
-1. **Fundamento Legal:** El Artículo 476 numeral 3 del Estatuto Tributario excluye expresamente del IVA los servicios de intermediación en el Sistema de Seguridad Social Integral.
-2. **Sentencia C-049 de 2022:** La Corte Constitucional ratificó que las comisiones que pagan las ARLs a los intermediarios provienen exclusivamente de los **gastos de administración de la ARL**, sin afectar las reservas de siniestros ni las cotizaciones de los trabajadores.
-3. **Facturación:** Al emitir la cuenta de cobro o factura electrónica a la ARL, se registra tarifa de **0% de IVA** con la leyenda de exclusión legal.`,
-
-  decreto768: `📋 **Tabla de Cotización y Clases de Riesgo (Decreto 768 de 2022):**
-
-* **Clase I (Mínimo):** Tasa 0.522% (Rango 0.348% - 0.696%) - Oficinas, finanzas, comercio.
-* **Clase II (Bajo):** Tasa 1.044% (Rango 0.435% - 1.653%) - Manufactura liviana, textiles.
-* **Clase III (Medio):** Tasa 2.436% (Rango 0.783% - 4.089%) - Químicos, alimentos, metalmecánica.
-* **Clase IV (Alto):** Tasa 4.350% (Rango 1.740% - 6.960%) - Transporte de carga, fundición.
-* **Clase V (Máximo):** Tasa 6.960% (Rango 3.219% - 8.700%) - Minería, construcción, petróleos.
-
-*Fórmula:* Aporte ARL = IBC Mensual x Tasa de Cotización.`,
-
-  res0312: `👷 **Estándares Mínimos del SG-SST (Resolución 0312 de 2019):**
-
-1. **7 Estándares:** Empresas con 10 o menos trabajadores clasificadas en Riesgo I, II o III.
-2. **21 Estándares:** Empresas de 11 a 50 trabajadores clasificadas en Riesgo I, II o III.
-3. **60 Estándares:** Todas las empresas de más de 50 trabajadores (cualquier riesgo) y TODAS las empresas clasificadas en Riesgo IV o V (sin importar el número de trabajadores).
-
-*Criterios de Evaluación:*
-* Menor al 60%: **Crítico** (Plan de mejoramiento inmediato).
-* Entre 60% y 85%: **Moderadamente Aceptable**.
-* Mayor al 85%: **Aceptable**.`,
-
-  comisiones: `💰 **Esquema de Liquidación de Comisiones según Concepto de Negocio:**
-
-1. **Empresa Nueva (Vinculación inicial):** Comisión acordada según la clase de riesgo y masa salarial (típicamente 6.0% a 10.0% del aporte recaudado).
-2. **Nombramiento de Intermediario:** Designación de agencia para empresas ya activas en la ARL.
-3. **Cambio / Traslado de ARL:** Migración de empresa entre entidades aseguradoras (requiere antelación de 30 días y paz y salvo PILA).
-
-*Nota:* Los honorarios son asumidos 100% por la ARL receptora mediante sus gastos de administración.`,
-};
 
 export default function WappyIAPage() {
   const [clients, setClients] = useState<ClientCompany[]>([]);
+  const [leads, setLeads] = useState<LeadProspect[]>([]);
+  const [fieldVisits, setFieldVisits] = useState<FieldVisit[]>([]);
+  const [medicalRecords, setMedicalRecords] = useState<MedicalRecord[]>([]);
+  const [pilaRecords, setPilaRecords] = useState<PilaRecord[]>([]);
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
+  const [geminiKeys, setGeminiKeys] = useState<string>('');
+  const [keyPool, setKeyPool] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'ASSISTANT' | 'WHATSAPP'>('ASSISTANT');
 
   // AI Assistant Chat State
@@ -76,12 +81,22 @@ export default function WappyIAPage() {
     {
       id: '1',
       sender: 'AI',
-      text: '¡Hola Félix! Soy el asistente inteligente de **PRAXIS Prevención y Seguros**. Puedo orientarte en normatividad (Sentencia C-049/2022, Decreto 768/2022, Res. 0312/2019), exclusión de IVA, liquidación de comisiones de las 5 ARLs oficiales o redactar notificaciones de cartera para WhatsApp. ¿En qué puedo apoyarte hoy?',
+      text: `¡Hola! Soy **PRAXIS IA** 🤖, el agente autónomo de intermediación de ARL y consultoría SG-SST en Colombia.
+
+No solo resuelvo consultas legales y de comisiones (Sentencia C-049/2022, Decreto 768/2022, Res. 0312/2019), sino que **puedo ejecutar acciones directas en la plataforma por ti**:
+• 🏢 **Crear y afiliar empresas** con NIT, ARL y clases de riesgo.
+• 📅 **Agendar y registrar visitas técnicas SST** o auditorías Res. 0312.
+• 🩺 **Registrar accidentes laborales con FURAT**, ausentismo o enfermedad.
+• 💰 **Liquidar planillas PILA** y calcular comisiones y bolsa de retorno SST.
+• 📊 **Consultar consolidados y estadísticas** de la agencia.
+
+¿Qué tarea deseas que ejecute hoy?`,
       timestamp: 'Ahora',
     },
   ]);
   const [inputPrompt, setInputPrompt] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // WhatsApp Automation State
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -89,15 +104,45 @@ export default function WappyIAPage() {
   const [customMessage, setCustomMessage] = useState('');
   const [sendSuccess, setSendSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadAllData = () => {
     const cls = getStoredClients();
     setClients(cls);
+    setLeads(getStoredLeads());
+    setFieldVisits(getStoredFieldVisits());
+    setMedicalRecords(getStoredMedicalRecords());
+    setPilaRecords(getStoredPilaRecords());
     setMessages(getStoredWhatsAppMessages());
-    if (cls.length > 0) {
+
+    const keys = getStoredGeminiKeys();
+    setGeminiKeys(keys);
+    setKeyPool(extractKeyPool(keys));
+
+    if (cls.length > 0 && !selectedClientId) {
       setSelectedClientId(cls[0].id);
       updateTemplatePreview(cls[0], 'RECORDATORIO_PILA');
     }
+  };
+
+  useEffect(() => {
+    loadAllData();
+
+    const handleSync = () => loadAllData();
+    window.addEventListener('praxis_data_synced', handleSync);
+    window.addEventListener('praxis_profile_updated', handleSync);
+
+    return () => {
+      window.removeEventListener('praxis_data_synced', handleSync);
+      window.removeEventListener('praxis_profile_updated', handleSync);
+    };
   }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, isTyping]);
+
+  const openProfileKeysModal = () => {
+    window.dispatchEvent(new CustomEvent('praxis_open_profile', { detail: { tab: 'AI_KEYS' } }));
+  };
 
   const updateTemplatePreview = (client: ClientCompany, type: WhatsAppMessage['messageType']) => {
     let msg = '';
@@ -152,9 +197,9 @@ export default function WappyIAPage() {
     setTimeout(() => setSendSuccess(null), 3500);
   };
 
-  const handleSendPrompt = (promptText?: string) => {
+  const handleSendPrompt = async (promptText?: string) => {
     const textToSend = promptText || inputPrompt;
-    if (!textToSend.trim()) return;
+    if (!textToSend.trim() || isTyping) return;
 
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
@@ -167,87 +212,157 @@ export default function WappyIAPage() {
     setInputPrompt('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      let aiText = '';
-      const lower = textToSend.toLowerCase();
+    const currentContext = {
+      clients: getStoredClients(),
+      leads: getStoredLeads(),
+      visits: getStoredFieldVisits(),
+      medicalRecords: getStoredMedicalRecords(),
+      pilaRecords: getStoredPilaRecords(),
+    };
 
-      if (lower.includes('iva') || lower.includes('tribut') || lower.includes('476') || lower.includes('c-049')) {
-        aiText = KNOWLEDGE_RESPONSES.iva;
-      } else if (lower.includes('768') || lower.includes('tasa') || lower.includes('clase') || lower.includes('riesgo')) {
-        aiText = KNOWLEDGE_RESPONSES.decreto768;
-      } else if (lower.includes('0312') || lower.includes('estandar') || lower.includes('auditoria')) {
-        aiText = KNOWLEDGE_RESPONSES.res0312;
-      } else if (lower.includes('comision') || lower.includes('nombramiento') || lower.includes('nueva') || lower.includes('concepto')) {
-        aiText = KNOWLEDGE_RESPONSES.comisiones;
-      } else if (lower.includes('calcular') || lower.includes('nomina') || lower.includes('ibc') || lower.includes('200')) {
-        aiText = `📊 **Cálculo de Liquidación Estimada (Ejemplo Nómina $200.000.000 COP):**
+    try {
+      const response = await fetch('/api/ai/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: textToSend,
+          history: chatMessages.slice(-6).map((m) => ({ sender: m.sender, text: m.text })),
+          customKeys: getStoredGeminiKeys(),
+          currentContext,
+        }),
+      });
 
-1. **Clase I (0.522%):** Aporte ARL = $1.044.000 COP | Comisión al 6.0% = **$62.640 COP** (0% IVA)
-2. **Clase III (2.436%):** Aporte ARL = $4.872.000 COP | Comisión al 7.5% = **$365.400 COP** (0% IVA)
-3. **Clase V (6.960%):** Aporte ARL = $13.920.000 COP | Comisión al 9.0% = **$1.252.800 COP** (0% IVA)
+      const result = await response.json();
 
-*Recuerda que la liquidación final dependerá del número de novedades y días cotizados reportados en la Planilla PILA.*`;
-      } else {
-        aiText = `He analizado tu consulta con el motor normativo de **PRAXIS Prevención y Seguros & SGRL Colombia**.
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al comunicarse con el Agente PRAXIS IA');
+      }
 
-La normatividad vigente (Sentencia C-049 de 2022 y Decreto 768 de 2022) exige que la intermediación de ARL mantenga estricta concordancia con la nómina reportada en PILA y la clase de riesgo del centro de trabajo.
+      // Si el agente ejecutó una herramienta de mutación en la plataforma, aplicarla al almacenamiento
+      if (result.actionExecuted && result.actionExecuted.data) {
+        const action: ToolExecutionResult = result.actionExecuted;
+        
+        if (action.entityType === 'CLIENT') {
+          const updated = [action.data, ...getStoredClients().filter((c) => c.id !== action.data.id)];
+          saveStoredClients(updated);
+          setClients(updated);
+        } else if (action.entityType === 'LEAD') {
+          const updated = [action.data, ...getStoredLeads().filter((l) => l.id !== action.data.id)];
+          saveStoredLeads(updated);
+          setLeads(updated);
+        } else if (action.entityType === 'VISIT') {
+          const updated = [action.data, ...getStoredFieldVisits().filter((v) => v.id !== action.data.id)];
+          saveStoredFieldVisits(updated);
+          setFieldVisits(updated);
+        } else if (action.entityType === 'MEDICAL') {
+          const updated = [action.data, ...getStoredMedicalRecords().filter((m) => m.id !== action.data.id)];
+          saveStoredMedicalRecords(updated);
+          setMedicalRecords(updated);
+        } else if (action.entityType === 'PILA') {
+          const updated = [action.data, ...getStoredPilaRecords().filter((p) => p.id !== action.data.id)];
+          saveStoredPilaRecords(updated);
+          setPilaRecords(updated);
+        }
 
-¿Deseas que simulemos un cálculo específico para una empresa o configuremos una notificación automática de cartera por WhatsApp?`;
+        // Emitir evento global de sincronización para que otras pantallas (Dashboard, Clientes, etc.) se actualicen
+        window.dispatchEvent(new Event('praxis_data_synced'));
       }
 
       const aiMsg: ChatMessage = {
         id: `msg-ai-${Date.now()}`,
         sender: 'AI',
-        text: aiText,
+        text: result.reply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        actionExecuted: result.actionExecuted || undefined,
+        modelUsed: result.modelUsed,
+        rotationsPerformed: result.rotationsPerformed,
+        isFallback: result.isFallback,
       };
 
       setChatMessages((prev) => [...prev, aiMsg]);
+    } catch (err: any) {
+      const errorMsg: ChatMessage = {
+        id: `msg-err-${Date.now()}`,
+        sender: 'AI',
+        text: `⚠️ **Error en procesamiento:** ${err.message || 'No fue posible completar la solicitud.'}\n\nPuedes configurar o renovar tus claves API de Gemini en el menú de **Perfil ➔ Claves de IA**.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setChatMessages((prev) => [...prev, errorMsg]);
+    } finally {
       setIsTyping(false);
-    }, 1000);
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Header & Status Indicator */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-400/30 flex items-center gap-1">
-              <Bot size={12} /> GEMINI 2.5 & WHATSAPP
+              <Bot size={12} /> AGENTE AUTÓNOMO PRAXIS
             </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">Motor de Asistencia & CRM Omnicanal</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              Rotación Dual-Axis Gemini (LibreChat Engine) & Ejecución en Vivo
+            </span>
           </div>
           <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1">
-            PRAXIS IA & Automatización WhatsApp
+            PRAXIS IA & Automatización Operativa
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-            Consultas normativas SGRL, soporte técnico para {clients.length} empresas activas y disparadores de WhatsApp.
+            Instruye al agente para crear empresas, agendar visitas SST, radicar accidentes FURAT o liquidar planillas PILA.
           </p>
         </div>
 
-        {/* Tab Buttons */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab('ASSISTANT')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-              activeTab === 'ASSISTANT'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
-                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+        {/* Tab Buttons & Key Pool Pill */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5">
+          {/* Key Pool Pill */}
+          <div
+            onClick={openProfileKeysModal}
+            className={`cursor-pointer px-3 py-1.5 rounded-xl border text-xs flex items-center gap-2 transition-all hover:scale-[1.02] shadow-sm ${
+              keyPool.length > 0
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
+                : 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-500/30 text-amber-800 dark:text-amber-300'
             }`}
+            title="Haz clic para configurar el pool de claves API de Gemini"
           >
-            <Bot size={14} /> Asistente Normativo IA
-          </button>
-          <button
-            onClick={() => setActiveTab('WHATSAPP')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
-              activeTab === 'WHATSAPP'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
-            }`}
-          >
-            <MessageSquare size={14} /> Automatizaciones WhatsApp
-          </button>
+            <div className={`h-2 w-2 rounded-full ${keyPool.length > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+            <div className="text-[11px]">
+              <span className="font-bold">Pool Gemini:</span>{' '}
+              {keyPool.length > 0 ? (
+                <span>
+                  <strong>{keyPool.length}</strong> {keyPool.length === 1 ? 'clave activa' : 'claves activas'}
+                </span>
+              ) : (
+                <span>Sin claves configuradas</span>
+              )}
+            </div>
+            <Key size={12} className="opacity-70" />
+          </div>
+
+          {/* Tab Selector */}
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => setActiveTab('ASSISTANT')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'ASSISTANT'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Bot size={13} /> Consola del Agente
+            </button>
+            <button
+              onClick={() => setActiveTab('WHATSAPP')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'WHATSAPP'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <MessageSquare size={13} /> WhatsApp CRM
+            </button>
+          </div>
         </div>
       </div>
 
@@ -258,12 +373,12 @@ La normatividad vigente (Sentencia C-049 de 2022 y Decreto 768 de 2022) exige qu
         </div>
       )}
 
-      {/* TAB 1: AI ASSISTANT */}
+      {/* TAB 1: AUTONOMOUS AI AGENT */}
       {activeTab === 'ASSISTANT' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Chat Stream */}
+          {/* Main Chat Stream (2 Columns) */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 flex flex-col h-[520px] justify-between shadow-sm">
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 flex flex-col h-[600px] justify-between shadow-sm">
               {/* Messages Container */}
               <div className="overflow-y-auto space-y-4 pr-1">
                 {chatMessages.map((msg) => (
@@ -277,37 +392,113 @@ La normatividad vigente (Sentencia C-049 de 2022 y Decreto 768 de 2022) exige qu
                       className={`h-8 w-8 rounded-xl flex items-center justify-center text-xs shrink-0 ${
                         msg.sender === 'AI'
                           ? 'bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30'
-                          : 'bg-slate-800 text-white'
+                          : 'bg-slate-800 text-white shadow-sm'
                       }`}
                     >
                       {msg.sender === 'AI' ? <Bot size={16} /> : 'FB'}
                     </div>
 
                     <div
-                      className={`p-3.5 rounded-2xl max-w-[85%] text-xs leading-relaxed ${
+                      className={`p-4 rounded-2xl max-w-[88%] text-xs leading-relaxed ${
                         msg.sender === 'AI'
-                          ? 'bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 whitespace-pre-wrap'
+                          ? 'bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200'
                           : 'bg-blue-600 text-white'
                       }`}
                     >
-                      {msg.text}
-                      <span
-                        className={`text-[9px] block mt-1 font-mono ${
-                          msg.sender === 'AI' ? 'text-slate-400 dark:text-slate-500' : 'text-blue-200'
-                        }`}
-                      >
-                        {msg.timestamp}
-                      </span>
+                      <div className="whitespace-pre-wrap">{msg.text}</div>
+
+                      {/* Tarjeta Visual de Acción Ejecutada en la Plataforma */}
+                      {msg.actionExecuted && (
+                        <div className="mt-3 p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-emerald-400/40 dark:border-emerald-500/40 shadow-sm space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                              <span className="font-bold text-[11px] text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
+                                Tarea Ejecutada: {msg.actionExecuted.action}
+                              </span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                              ✓ Plataforma Actualizada
+                            </span>
+                          </div>
+
+                          {/* Metadatos específicos de la entidad creada */}
+                          {msg.actionExecuted.entityType === 'CLIENT' && msg.actionExecuted.data && (
+                            <div className="grid grid-cols-2 gap-2 text-[10px] bg-slate-50 dark:bg-slate-950 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                              <div><span className="text-slate-400">Razón Social:</span> <strong className="text-slate-800 dark:text-slate-200 block">{msg.actionExecuted.data.name}</strong></div>
+                              <div><span className="text-slate-400">NIT:</span> <strong className="text-slate-800 dark:text-slate-200 block">{msg.actionExecuted.data.nit}</strong></div>
+                              <div><span className="text-slate-400">ARL:</span> <strong className="text-slate-800 dark:text-slate-200 block uppercase">{msg.actionExecuted.data.primaryArlId}</strong></div>
+                              <div><span className="text-slate-400">Trabajadores:</span> <strong className="text-slate-800 dark:text-slate-200 block">{msg.actionExecuted.data.employeeCount}</strong></div>
+                            </div>
+                          )}
+
+                          {msg.actionExecuted.entityType === 'VISIT' && msg.actionExecuted.data && (
+                            <div className="grid grid-cols-2 gap-2 text-[10px] bg-slate-50 dark:bg-slate-950 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                              <div><span className="text-slate-400">Empresa:</span> <strong className="text-slate-800 dark:text-slate-200 block">{msg.actionExecuted.data.clientName}</strong></div>
+                              <div><span className="text-slate-400">Fecha:</span> <strong className="text-slate-800 dark:text-slate-200 block">{msg.actionExecuted.data.visitDate}</strong></div>
+                              <div><span className="text-slate-400">Tipo:</span> <strong className="text-slate-800 dark:text-slate-200 block">{msg.actionExecuted.data.visitType}</strong></div>
+                              <div><span className="text-slate-400">Horas:</span> <strong className="text-slate-800 dark:text-slate-200 block">{msg.actionExecuted.data.hoursSpent} hrs</strong></div>
+                            </div>
+                          )}
+
+                          {msg.actionExecuted.entityType === 'MEDICAL' && msg.actionExecuted.data && (
+                            <div className="grid grid-cols-2 gap-2 text-[10px] bg-slate-50 dark:bg-slate-950 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                              <div><span className="text-slate-400">Trabajador:</span> <strong className="text-slate-800 dark:text-slate-200 block">{msg.actionExecuted.data.employeeName}</strong></div>
+                              <div><span className="text-slate-400">Evento:</span> <strong className="text-slate-800 dark:text-slate-200 block">{msg.actionExecuted.data.incidentType}</strong></div>
+                              <div><span className="text-slate-400">Incapacidad:</span> <strong className="text-slate-800 dark:text-slate-200 block">{msg.actionExecuted.data.daysLost} días</strong></div>
+                              <div><span className="text-slate-400">Radicado:</span> <strong className="text-slate-800 dark:text-slate-200 block">{msg.actionExecuted.data.furatFurepCode}</strong></div>
+                            </div>
+                          )}
+
+                          {msg.actionExecuted.entityType === 'PILA' && msg.actionExecuted.data && (
+                            <div className="grid grid-cols-2 gap-2 text-[10px] bg-slate-50 dark:bg-slate-950 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                              <div><span className="text-slate-400">Empresa:</span> <strong className="text-slate-800 dark:text-slate-200 block">{msg.actionExecuted.data.clientName}</strong></div>
+                              <div><span className="text-slate-400">Periodo:</span> <strong className="text-slate-800 dark:text-slate-200 block">{msg.actionExecuted.data.period}</strong></div>
+                              <div><span className="text-slate-400">IBC Nómina:</span> <strong className="text-slate-800 dark:text-slate-200 block">${(msg.actionExecuted.data.totalIbc || 0).toLocaleString('es-CO')} COP</strong></div>
+                              <div><span className="text-slate-400">Bolsa Retorno:</span> <strong className="text-emerald-600 dark:text-emerald-400 block">${(msg.actionExecuted.data.retornoValor || 0).toLocaleString('es-CO')} COP</strong></div>
+                            </div>
+                          )}
+
+                          {msg.actionExecuted.redirectUrl && (
+                            <div className="pt-1 flex justify-end">
+                              <Link
+                                href={msg.actionExecuted.redirectUrl}
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                Ver registro completo en el módulo <ExternalLink size={11} />
+                              </Link>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Metadatos de la respuesta (Modelo, Rotación) */}
+                      <div className="flex items-center justify-between gap-2 mt-2 pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 text-[9px] font-mono">
+                        <span className={msg.sender === 'AI' ? 'text-slate-400 dark:text-slate-500' : 'text-blue-200'}>
+                          {msg.timestamp}
+                        </span>
+                        {msg.modelUsed && (
+                          <span className="text-slate-400 dark:text-slate-500">
+                            Modelo: {msg.modelUsed} {msg.rotationsPerformed ? `(rotación x${msg.rotationsPerformed})` : ''}
+                          </span>
+                        )}
+                        {msg.isFallback && (
+                          <span className="text-amber-500 font-sans font-bold">
+                            (Procesamiento Autónomo Local)
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
 
                 {isTyping && (
-                  <div className="flex items-center gap-2 text-xs text-slate-500 pl-2">
-                    <Sparkles size={14} className="animate-spin text-blue-500" />
-                    <span>PRAXIS IA consultando decretos y jurisprudencia...</span>
+                  <div className="flex items-center gap-2 text-xs text-blue-600 dark:text-blue-400 pl-2 animate-pulse">
+                    <Sparkles size={15} className="animate-spin text-blue-500" />
+                    <span>PRAXIS IA analizando solicitud y ejecutando herramientas en plataforma...</span>
                   </div>
                 )}
+                <div ref={messagesEndRef} />
               </div>
 
               {/* Chat Input Bar */}
@@ -317,12 +508,15 @@ La normatividad vigente (Sentencia C-049 de 2022 y Decreto 768 de 2022) exige qu
                   value={inputPrompt}
                   onChange={(e) => setInputPrompt(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendPrompt()}
-                  placeholder="Formula una consulta legal, cálculo de comisión o estándar SST..."
-                  className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Instruye al agente: 'Crear empresa...', 'Agendar visita...', 'Registrar FURAT...', etc."
+                  disabled={isTyping}
+                  className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                 />
                 <button
                   onClick={() => handleSendPrompt()}
-                  className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 transition-all"
+                  disabled={isTyping || !inputPrompt.trim()}
+                  className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/30 transition-all disabled:opacity-50"
+                  title="Enviar instrucción"
                 >
                   <Send size={15} />
                 </button>
@@ -330,46 +524,108 @@ La normatividad vigente (Sentencia C-049 de 2022 y Decreto 768 de 2022) exige qu
             </div>
           </div>
 
-          {/* Quick Prompts Column */}
+          {/* Quick Actions & Model Architecture (Right Column) */}
           <div className="space-y-4">
+            {/* Quick Prompt Cards */}
             <div className="p-5 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-3 shadow-sm">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                <Zap size={14} className="text-amber-500" /> Consultas Rápidas Preconfiguradas
+                <Zap size={14} className="text-amber-500" /> Tareas Autónomas de Ejemplo
               </h3>
 
-              <div className="space-y-2">
+              <div className="space-y-2 text-left">
                 <button
-                  onClick={() => handleSendPrompt('¿Por qué las comisiones de ARL no tienen IVA según la Sentencia C-049 de 2022?')}
-                  className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all flex items-center justify-between group"
+                  onClick={() => handleSendPrompt('Crear cliente Distribuciones del Caribe SAS con NIT 901.888.777-1 en ARL Sura riesgo 3 con 18 trabajadores e IBC de 42 millones en Barranquilla')}
+                  className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
                 >
-                  <span className="font-semibold text-[11px]">Exclusión IVA (Art. 476 ET & C-049)</span>
-                  <span className="text-slate-400 group-hover:text-blue-500">→</span>
+                  <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold text-[11px] mb-0.5">
+                    <Building2 size={13} /> Crear Empresa Afiliada
+                  </div>
+                  <p className="text-[10px] text-slate-500 line-clamp-2">
+                    "Crear cliente Distribuciones del Caribe SAS con NIT 901.888.777-1 en ARL Sura..."
+                  </p>
                 </button>
 
                 <button
-                  onClick={() => handleSendPrompt('Muéstrame la tabla oficial de cotización del Decreto 768 de 2022')}
-                  className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all flex items-center justify-between group"
+                  onClick={() => handleSendPrompt('Programar visita técnica de auditoría de estándares mínimos 0312 para Transportes Andinos el 22 de septiembre a las 9:00 AM')}
+                  className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-amber-500/50 hover:bg-amber-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
                 >
-                  <span className="font-semibold text-[11px]">Tasas de Cotización (Dec. 768/2022)</span>
-                  <span className="text-slate-400 group-hover:text-blue-500">→</span>
+                  <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold text-[11px] mb-0.5">
+                    <HardHat size={13} /> Programar Auditoría SST
+                  </div>
+                  <p className="text-[10px] text-slate-500 line-clamp-2">
+                    "Programar visita técnica de auditoría de estándares mínimos 0312 para Transportes Andinos..."
+                  </p>
                 </button>
 
                 <button
-                  onClick={() => handleSendPrompt('¿Cómo se dividen los estándares mínimos en la Resolución 0312 de 2019?')}
-                  className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all flex items-center justify-between group"
+                  onClick={() => handleSendPrompt('Registrar accidente de trabajo con FURAT para el trabajador Carlos Gómez en Constructora Bolívar por contusión en rodilla izquierda con 4 días de incapacidad')}
+                  className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
                 >
-                  <span className="font-semibold text-[11px]">Estándares Mínimos (Res. 0312)</span>
-                  <span className="text-slate-400 group-hover:text-blue-500">→</span>
+                  <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold text-[11px] mb-0.5">
+                    <Stethoscope size={13} /> Radicar Accidente FURAT
+                  </div>
+                  <p className="text-[10px] text-slate-500 line-clamp-2">
+                    "Registrar accidente de trabajo con FURAT para Carlos Gómez en Constructora Bolívar..."
+                  </p>
                 </button>
 
                 <button
-                  onClick={() => handleSendPrompt('Calcula la comisión para una empresa con nómina de 200 millones en riesgos I, III y V')}
-                  className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all flex items-center justify-between group"
+                  onClick={() => handleSendPrompt('Liquidar planilla PILA para Logística del Norte periodo actual con nómina de 55 millones')}
+                  className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-indigo-500/50 hover:bg-indigo-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
                 >
-                  <span className="font-semibold text-[11px]">Cálculo Comisiones Nómina $200M</span>
-                  <span className="text-slate-400 group-hover:text-blue-500">→</span>
+                  <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-bold text-[11px] mb-0.5">
+                    <Calculator size={13} /> Liquidar Planilla PILA
+                  </div>
+                  <p className="text-[10px] text-slate-500 line-clamp-2">
+                    "Liquidar planilla PILA para Logística del Norte periodo actual con nómina de 55 millones..."
+                  </p>
+                </button>
+
+                <button
+                  onClick={() => handleSendPrompt('¿Cuál es el resumen de clientes, distribución por ARL y visitas programadas en la plataforma?')}
+                  className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-purple-500/50 hover:bg-purple-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
+                >
+                  <div className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 font-bold text-[11px] mb-0.5">
+                    <Layers size={13} /> Resumen Ejecutivo Plataforma
+                  </div>
+                  <p className="text-[10px] text-slate-500 line-clamp-2">
+                    "¿Cuál es el resumen de clientes, distribución por ARL y visitas programadas...?"
+                  </p>
+                </button>
+
+                <button
+                  onClick={() => handleSendPrompt('¿Por qué las comisiones de ARL no tienen IVA según la Sentencia C-049 de 2022 y el Estatuto Tributario?')}
+                  className="w-full text-left p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 hover:bg-blue-50/50 dark:hover:bg-slate-800/40 text-xs text-slate-700 dark:text-slate-300 transition-all group"
+                >
+                  <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold text-[11px] mb-0.5">
+                    <Shield size={13} /> Exclusión Legal de IVA (C-049/2022)
+                  </div>
+                  <p className="text-[10px] text-slate-500 line-clamp-2">
+                    "¿Por qué las comisiones de ARL no tienen IVA según la Sentencia C-049 de 2022...?"
+                  </p>
                 </button>
               </div>
+            </div>
+
+            {/* Architecture Card */}
+            <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-2.5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1">
+                  <RotateCcw size={13} /> Arquitectura LibreChat
+                </span>
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                  Dual-Axis
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Rotación de pool horizontal ante <strong>429 / 403</strong> (cuotas) y degradación vertical ante <strong>503</strong> (gemini-2.5-flash ➔ 2.0-flash ➔ 1.5-flash ➔ 1.5-pro).
+              </p>
+              <button
+                onClick={openProfileKeysModal}
+                className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] transition-all flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <Key size={13} /> Administrar Claves en Perfil
+              </button>
             </div>
           </div>
         </div>
@@ -453,7 +709,7 @@ La normatividad vigente (Sentencia C-049 de 2022 y Decreto 768 de 2022) exige qu
                 <Clock size={14} className="text-blue-500" /> Registro de Envíos Recientes
               </h3>
 
-              <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+              <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
                 {messages.map((m) => (
                   <div key={m.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 text-xs space-y-1">
                     <div className="flex justify-between items-center">
