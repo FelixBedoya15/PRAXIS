@@ -588,7 +588,7 @@ export default function ProfileModal({ isOpen, onClose, defaultTab = 'USER' }: P
                     <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[10px] space-y-0.5 text-slate-500 font-mono">
                       <div>• Retención en la fuente: <strong>10.0%</strong></div>
                       <div>• IVA Intermediación: <strong>0% Excluido</strong></div>
-                      <div>• Cruce Bolsa SST en tiempo real</div>
+                      <div>• Cruce de Reinversión en tiempo real</div>
                     </div>
                   </div>
 

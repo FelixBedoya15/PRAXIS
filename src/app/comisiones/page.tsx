@@ -876,7 +876,7 @@ export default function ComisionesPage() {
             </div>
           </div>
           <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[10px] text-slate-500 flex justify-between">
-            <span>Bolsa SST Clientes</span>
+            <span>Retorno Reinversión Clientes</span>
             <span className="font-semibold text-indigo-600">% Pactado</span>
           </div>
         </div>

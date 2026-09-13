@@ -1929,7 +1929,7 @@ A partir de este momento cuentan con el respaldo integral de *PRAXIS Prevención
                         type="button"
                         onClick={() => openRetornoModal(client)}
                         className="p-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white transition-all border border-indigo-200 dark:border-indigo-800 shadow-sm"
-                        title={`Retorno a Empresa: ${client.returnPercentage ?? 25}% ($${formatCOP(fin.totalCommission * ((client.returnPercentage ?? 25) / 100))}/mes bolsa SST) - Clic para abrir popup`}
+                        title={`Retorno a Empresa: ${client.returnPercentage ?? 25}% ($${formatCOP(fin.totalCommission * ((client.returnPercentage ?? 25) / 100))}/mes reinversión) - Clic para abrir popup`}
                       >
                         <Percent size={13} />
                       </button>
@@ -3995,7 +3995,7 @@ A partir de este momento cuentan con el respaldo integral de *PRAXIS Prevención
                 <div className="min-w-0 flex-1 pr-2">
                   <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
                     <Percent size={13} />
-                    <span>Acuerdo de Retorno & Bolsa SST</span>
+                    <span>Acuerdo de Retorno & Reinversión SST</span>
                   </div>
                   <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white mt-0.5 leading-snug break-words">
                     {retornoClient.name}
@@ -4087,7 +4087,7 @@ A partir de este momento cuentan con el respaldo integral de *PRAXIS Prevención
               <div className="p-3.5 rounded-2xl bg-slate-900 text-white space-y-2.5 text-xs shadow-md">
                 <div className="flex items-center justify-between">
                   <span className="text-indigo-300 font-bold flex items-center gap-1">
-                    <span>🎁</span> Retorno Empresa (Bolsa SST Mensual):
+                    <span>🎁</span> Retorno Empresa (Reinversión Mensual):
                   </span>
                   <span className="font-mono font-black text-emerald-400 text-sm">
                     {formatCOP(returnAmount)}/mes
@@ -4095,7 +4095,7 @@ A partir de este momento cuentan con el respaldo integral de *PRAXIS Prevención
                 </div>
 
                 <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800 pt-2">
-                  <span>Proyección Anual Bolsa SST:</span>
+                  <span>Proyección Anual de Retorno:</span>
                   <span className="font-mono font-bold text-slate-200">
                     {formatCOP(annualReturnAmount)}/año
                   </span>

@@ -193,7 +193,6 @@ export default function Navigation({ children }: { children: React.ReactNode }) 
       href: '/examenes-ocupacionales',
       label: 'Exámenes Ocupacionales',
       icon: Stethoscope,
-      badge: 'Bolsa SST',
       roles: ['ADMIN', 'ANALISTA_FINANCIERO', 'INGENIERO_SST', 'MEDICO_LABORAL', 'ASESOR_COMERCIAL'],
     },
     {

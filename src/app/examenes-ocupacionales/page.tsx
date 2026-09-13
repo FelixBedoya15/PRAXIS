@@ -246,7 +246,7 @@ export default function ExamenesOcupacionalesPage() {
     setExams(updated);
     saveStoredOccupationalExams(updated);
     setShowNewModal(false);
-    showNotification(`Examen ocupacional de ${newExam.employeeName} registrado con cargo a la Bolsa de Reinversión SST.`);
+    showNotification(`Examen ocupacional de ${newExam.employeeName} registrado con cargo a la Reinversión de Clientes.`);
   };
 
   const handleSaveEditExam = (e: React.FormEvent) => {
@@ -291,9 +291,6 @@ export default function ExamenesOcupacionalesPage() {
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-extrabold uppercase tracking-wider border border-emerald-500/20">
               Resolución 1843 de 1991 • Res. 2346 de 2007
             </span>
-            <span className="px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-extrabold uppercase tracking-wider border border-blue-500/20">
-              Bolsa de Reinversión SST
-            </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
             <Stethoscope className="text-emerald-600 dark:text-emerald-400" size={26} />
@@ -323,14 +320,14 @@ export default function ExamenesOcupacionalesPage() {
         </div>
       </div>
 
-      {/* Row 1: KPI Cards - Financiación con Bolsa de Reinversión SST */}
+      {/* Row 1: KPI Cards - Financiación con Reinversión de Clientes */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total Retorno Acumulado */}
         <div className="p-4 rounded-3xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between space-y-2">
           <div>
             <div className="flex items-center justify-between text-slate-500">
               <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                Bolsa de Reinversión SST
+                Reinversión de Clientes
               </span>
               <DollarSign size={16} className="text-blue-500" />
             </div>
@@ -372,7 +369,7 @@ export default function ExamenesOcupacionalesPage() {
           <div>
             <div className="flex items-center justify-between text-slate-500">
               <span className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400">
-                Saldo Disponible en Bolsa
+                Saldo Disponible de Reinversión
               </span>
               <Zap size={16} className="text-purple-500" />
             </div>
@@ -435,7 +432,7 @@ export default function ExamenesOcupacionalesPage() {
 
             <div className="flex items-center gap-3 self-start sm:self-auto text-xs">
               <div className="text-right">
-                <span className="text-[10px] text-slate-500 block">Saldo en Bolsa:</span>
+                <span className="text-[10px] text-slate-500 block">Saldo de Reinversión:</span>
                 <strong className="font-mono text-emerald-600 dark:text-emerald-400 text-sm">
                   {formatCOP(selectedClientBag.availableBalance)}
                 </strong>
@@ -458,7 +455,7 @@ export default function ExamenesOcupacionalesPage() {
                 Invertido en exámenes: <strong>{formatCOP(selectedClientBag.examsSpent)}</strong> de <strong>{formatCOP(selectedClientBag.returnAccumulated)}</strong>
               </span>
               <span className="font-bold text-slate-700 dark:text-slate-300">
-                {selectedClientBag.percentUsed}% de la bolsa ejecutada
+                {selectedClientBag.percentUsed}% de reinversión ejecutada
               </span>
             </div>
             <div className="h-2.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -597,7 +594,7 @@ export default function ExamenesOcupacionalesPage() {
                 <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-[11px] space-y-1">
                   <div className="flex justify-between">
                     <span className="text-slate-500">Tipo: <strong className="text-slate-800 dark:text-slate-200">{ex.examType}</strong></span>
-                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">{formatCOP(ex.totalCost)} (Bolsa)</span>
+                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">{formatCOP(ex.totalCost)} (Cubierto)</span>
                   </div>
                   {ex.specializedEmphasis && (
                     <div className="text-[10px] text-slate-500 truncate">
@@ -728,7 +725,7 @@ export default function ExamenesOcupacionalesPage() {
                       <strong className="font-mono text-emerald-600 dark:text-emerald-400 text-xs block">
                         {formatCOP(ex.totalCost)}
                       </strong>
-                      <span className="text-[9px] text-slate-400 block">Cubierto con Bolsa</span>
+                      <span className="text-[9px] text-slate-400 block">Cubierto con Retorno</span>
                     </td>
                     <td className="py-3.5 px-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
@@ -896,7 +893,7 @@ export default function ExamenesOcupacionalesPage() {
                   ))}
                 </select>
                 <span className="text-[10px] text-slate-500 block">
-                  * El costo de este examen se descontará automáticamente de la Bolsa de Retorno PILA ($0 COP para la empresa).
+                  * El costo de este examen se cubrirá automáticamente con la Reinversión de comisiones ARL ($0 COP para la empresa).
                 </span>
               </div>
 
@@ -1150,7 +1147,7 @@ export default function ExamenesOcupacionalesPage() {
                   className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5"
                 >
                   <CheckCircle2 size={15} />
-                  <span>Guardar con cargo a Bolsa SST</span>
+                  <span>Guardar Examen Ocupacional</span>
                 </button>
               </div>
             </form>
@@ -1491,7 +1488,7 @@ export default function ExamenesOcupacionalesPage() {
 
               {/* Financing footer */}
               <div className="text-center text-[8px] text-slate-400 pt-3 border-t border-slate-200">
-                Servicio médico gestionado y valorizado por <strong>PRAXIS PREVENCIÓN Y SEGUROS</strong> a través de la Bolsa de Reinversión SST de Intermediación ARL. Valor: {formatCOP(certificateExam.totalCost)} (Sin cobro directo a la empresa).
+                Servicio médico gestionado y valorizado por <strong>PRAXIS PREVENCIÓN Y SEGUROS</strong> a través de la Reinversión de Comisiones de Intermediación ARL. Valor: {formatCOP(certificateExam.totalCost)} (Sin cobro directo a la empresa).
               </div>
             </div>
 
